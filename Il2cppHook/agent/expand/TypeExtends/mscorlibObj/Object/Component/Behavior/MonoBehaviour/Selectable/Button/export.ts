@@ -69,20 +69,29 @@ export function OnPointerClick(arg0: number = -1, self_addr: NativePointer = ptr
                     })
                 }
 
-                let _UnityButton_OnPointerClick_ptr
                 try {
-                    _UnityButton_OnPointerClick_ptr = ptr(Il2Cpp.Api.UnityButton._OnPointerClick)
+                    const _UnityButton_OnPointerClick_ptr = ptr(Il2Cpp.Api.UnityButton._OnPointerClick)
                     if (_UnityButton_OnPointerClick_ptr.isNull()) return
-                } catch (error) {
-                    return
-                }
+                    LOGE("Enable Hook UnityButton OnPointerClick at " + _UnityButton_OnPointerClick_ptr + "(" + _UnityButton_OnPointerClick_ptr.sub(soAddr_local) + ")" + "\n")
+                    A(_UnityButton_OnPointerClick_ptr, (args) => {
+                        LOGW("\n" + getLine(38))
+                        LOGD("public void UnityButton::OnPointerClick( " + args[0] + " , " + args[1] + " )")
+                        FakePointerEventData(args[1])
+                    })
+                } catch {}
 
-                LOGE("Enable Hook UnityButton OnPointerClick at " + _UnityButton_OnPointerClick_ptr + "(" + _UnityButton_OnPointerClick_ptr.sub(soAddr_local) + ")" + "\n")
-                A(_UnityButton_OnPointerClick_ptr, (args) => {
-                    LOGW("\n" + getLine(38))
-                    LOGD("public void UnityButton::OnPointerClick( " + args[0] + " , " + args[1] + " )")
-                    FakePointerEventData(args[1])
-                })
+                try {
+                    const method_OnClick = Il2Cpp.Domain.tryAssembly("Assembly-CSharp")!.image.tryClass!("UIButton")!.tryMethod!("OnClick")
+                    LOGE("Enable Hook UIButton OnClick at " + method_OnClick!.virtualAddress + "(" + method_OnClick!.virtualAddress.sub(soAddr_local) + ")" + "\n")
+                    A(method_OnClick!.virtualAddress, (args) => {
+                        LOGW("\n" + getLine(38))
+                        LOGD("public void UIButton::OnClick( " + args[0] + " )")
+                        const gameObj = getGameObject(args[0])!
+                        showGameObject(gameObj)
+                        // showComponents(gameObj)
+                    })
+                } catch {}
+                
             }
             break
         case 0:
