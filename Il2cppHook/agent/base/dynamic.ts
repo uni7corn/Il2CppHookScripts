@@ -70,7 +70,8 @@ const packMethod = (method: Il2Cpp.Method) => {
     return method
 }
 
-export const showParentClass = (handle: NativePointer | Il2Cpp.Class) => {
+export const showParentClass = (handle: NativePointer | Il2Cpp.Class | string) => {
+    if (typeof handle === "string") handle = findClass(handle)
     let clazz: Il2Cpp.Class | null = handle instanceof Il2Cpp.Class ? handle : new Il2Cpp.Class(checkCmdInput(handle))
     let display: string = ""
     while (clazz != null && !clazz.isNull()) {

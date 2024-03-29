@@ -34,21 +34,21 @@ export class PackList implements list_impl {
             if (!doNotCheck) {
                 if (!this.class.name.includes('List`')) throw new Error('Input mPtr is not a list')
             }
-            // _defaultCapacity 和 _emptyArray 不同unity版本可能不太一样
+            // _defaultCapacity 和 _emptyArray 不同 unity版本可能不太一样
             try {
-                this._defaultCapacity = this.class.field('_defaultCapacity').value as number
+                this._defaultCapacity = this.object.field<number>('_defaultCapacity').value
             } catch {
-                this._defaultCapacity = this.class.field('DefaultCapacity').value as number
+                this._defaultCapacity = this.object.tryField<number>('DefaultCapacity')!.value
             }
             try {
-                this._emptyArray = this.class.field('_emptyArray').value as NativePointer
+                this._emptyArray = this.object.field<NativePointer>('_emptyArray').value
             } catch {
-                this._emptyArray = this.class.field('s_emptyArray').value as NativePointer
+                this._emptyArray = this.object.tryField<NativePointer>('s_emptyArray')!.value
             }
-            this._items = this.class.field('_items').value as NativePointer
-            this._size = this.class.field('_size').value as number
-            this._version = this.class.field('_version').value as number
-            this._syncRoot = this.class.field('_syncRoot').value as NativePointer
+            this._items = this.object.tryField<NativePointer>('_items')!.value
+            this._size = this.object.tryField<number>('_size')!.value
+            this._version = this.object.tryField<number>('_version')!.value
+            this._syncRoot = this.object.tryField<NativePointer>('_syncRoot')!.value
         } catch (error) { throw error }
     }
 
@@ -115,43 +115,45 @@ export class PackList implements list_impl {
 
     get_Item(index: number = 0): Il2Cpp.Object {
         if (index > this.get_Count() - 1) throw new Error(`Index out of range: ${index}`)
-        return this.object.method('get_Item').invoke(index) as Il2Cpp.Object
+        const ret = new Il2Cpp.Object(this.object.method<NativePointer>('get_Item').invoke(index))
+        // LOGE(`${this.handle} | ${this.object.handle} | ${this.object.method<NativePointer>('get_Item')} | get_Item(${index}) -> ${ret} | ${ret.handle}`)
+        return ret
     }
 
     set_Item(index: number = 0, value: NativePointer): void {
-        return this.object.method('set_Item').invoke(index, value) as void
+        this.object.method('set_Item').invoke(index, value)
     }
 
     get_Capacity(): number {
-        return this.object.method('get_Capacity').invoke() as number
+        return this.object.method<number>('get_Capacity').invoke()
     }
 
     set_Capacity(newCapacity: number): void {
-        return this.object.method('set_Capacity').invoke(newCapacity) as void
+        this.object.method('set_Capacity').invoke(newCapacity)
     }
 
     get_Count(): number {
-        return this.object.method('get_Count').invoke() as number
+        return this.object.method<number>('get_Count').invoke()
     }
 
     RemoveAt(index: number = 0): void {
-        return this.object.method('RemoveAt').invoke(index) as void
+        this.object.method('RemoveAt').invoke(index)
     }
 
     Add(value: NativePointer): void {
-        return this.object.method('Add').invoke(value) as void
+        this.object.method('Add').invoke(value)
     }
 
     Contains(value: NativePointer): boolean {
-        return this.object.method('Contains').invoke(value) as boolean
+        return !this.object.method<NativePointer>('Contains').invoke(value).isNull()
     }
 
     Clear(): void {
-        return this.object.method('Clear').invoke() as void
+        this.object.method('Clear').invoke()
     }
 
     Reverse(): void {
-        return this.object.method('Reverse').invoke() as void
+        this.object.method('Reverse').invoke()
     }
 
     static localArray(mPtr: NativePointer): NativePointer {

@@ -1,12 +1,14 @@
 import { UnityEngine_EventSystems_PointerEventData_Impl as PointerEventData } from "../../../../../../AbstractEventData/BaseEventData/PointerEventData/class"
 import { UnityEngine_UI_Button_ButtonClickedEvent_Impl as ButtonClickedEvent } from "../../../../../../UnityEventBase/UnityEvent/ButtonClickedEvent/class"
 import { UnityEngine_Events_UnityAction_Impl as UnityAction } from "../../../../../../Delegate/MulticastDelegate/UnityAction/class"
+import { FakeCommonTypeObj as FakeCommonType } from "../../../../../../../../../base/valueResolve"
 import { PackList } from "../../../../../../../../../bridge/fix/packer/packList"
 import { GameObjectImpl as GameObject } from "../../../../../GameObject/class"
 import { formartClass as FM } from "../../../../../../../../../utils/formart"
+import { EventDelegate_Impl } from "../../../../../../EventDelegate/class"
 import { checkExtends } from "../../../../../../ValueType/exports"
-import { Button } from "./class"
 import { soName } from "../../../../../../../../../base/globle"
+import { Button } from "./class"
 
 /**
  * 打印点击事件GameObject层级
@@ -214,6 +216,37 @@ export const OnButtonClick = (mPtr: NativePointer = ptr(0)) => {
         } catch (error) {
             // LOGE(`Don't find EventTrigger.OnPointerClick`)
         }
+    }
+
+    // Assembly-CSharp UIButton protected virtual Void OnClick()
+    // UIButton -> UIButtonColor -> UIWidgetContainer -> MonoBehaviour -> Behaviour -> Component -> Object -> Object
+    try {
+        const method_OnClick = Il2Cpp.Domain.tryAssembly("Assembly-CSharp")!.image.tryClass!("UIButton")!.tryMethod!("OnClick")
+        A(method_OnClick!.virtualAddress, (args) => {
+            const instance = new Il2Cpp.Object(args[0])
+            const gameObject = new GameObject(getGameObject(instance.handle)!)
+            LOGD(`\n[*] ${instance.handle} ---> ${gameObject.get_name()} { G:${gameObject.handle} | T:${gameObject.get_transform().handle} }`)
+            //  0xc8 public List`1 onClick
+            const calls = instance.tryField<Il2Cpp.Object>("onClick")!.value
+            if (calls.isNull()) return
+            LOGZ(`\t[+] ${calls} | ${FakeCommonType(calls)}`)
+            new PackList(calls.handle).forEach((item: Il2Cpp.Object, index: number) => {
+                // LOGW(`\t\t[${index}] ${item.toString()} @ ${item.handle}`)
+                // LOGD(` ${method} | ${method.handle}`)
+                let method : Il2Cpp.Method | null = new EventDelegate_Impl(item.handle).mMethod.methodHandle
+                if (method == null){
+                    setTimeout(() => {
+                        // It's probably not initialized. The value is empty, so wait 100ms and try again
+                        method = new EventDelegate_Impl(item.handle).mMethod.methodHandle!
+                        LOGW(`\t\t[${index}] ${method.handle} -> ${method.relativeVirtualAddress} | ${method.class.image.assembly.name}.${method.class.name}.${method.name}`)
+                    }, 100);
+                } else {
+                    LOGW(`\t\t[${index}] ${method.handle} -> ${method.relativeVirtualAddress} | ${method.class.image.assembly.name}.${method.class.name}.${method.name}`)
+                }
+            })
+        })
+    } catch (error) {
+        // LOGE(`Don't find UnityButton.OnClick`)
     }
 
     function innerFunction(buttonInstance: NativePointer, eventData: NativePointer) {

@@ -167,6 +167,10 @@ export class ValueResolve {
     }
 }
 
+export function FakeCommonTypeObj(il2cppObject: Il2Cpp.Object):string {
+    return FakeCommonType(il2cppObject.class.type, il2cppObject.handle)
+}
+
 // 类型解析
 export function FakeCommonType(type: Il2Cpp.Type, mPtr: NativePointer): string {
     // LOGW(`FakeCommonType ${type.name} ${mPtr}`)
