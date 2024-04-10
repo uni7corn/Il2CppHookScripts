@@ -55,14 +55,18 @@ const PrintStackTraceNative = (ctx: CpuContext, fuzzy: boolean = false, retText:
     return !retText ? LOGZ(tmpText) : tmpText
 }
 
-var GetStackTrace = () => Java.use("android.util.Log").getStackTraceString(Java.use("java.lang.Throwable").$new())
+const GetStackTrace = () => Java.use("android.util.Log").getStackTraceString(Java.use("java.lang.Throwable").$new())
 
-var GetStackTraceNative = (ctx: CpuContext, level: number = 6) => {
+const GetStackTraceNativeSimple = (ctx: CpuContext, level: number = 6) => {
     return Thread.backtrace(ctx, Backtracer.FUZZY)
         .slice(0, level)
         .map(frame => DebugSymbol.fromAddress(frame))
         .map(symbol => `${getLine(level == undefined ? 0 : level, "\n")}${symbol}\n`)
         .join("\n")
+}
+
+const GetStackTraceNative = (ctx: CpuContext, level: number = 6, fuzzy: boolean = false):string => {
+    return PrintStackTraceNative(ctx, fuzzy, true, level) as string
 }
 
 export { PrintStackTrace, PrintStackTraceNative, GetStackTrace, GetStackTraceNative }
@@ -71,7 +75,7 @@ declare global {
     var PrintStackTraceJava: () => void
     var GetStackTraceJava: () => void
     var PrintStackTraceNative: (ctx: CpuContext, fuzzy?: boolean, retText?: boolean, slice?: number, reverse?: boolean, parseIl2cppMethodName?:boolean) => string | void
-    var GetStackTraceNative: (ctx: CpuContext, level?: number) => string
+    var GetStackTraceNative: (ctx: CpuContext, level?: number, fuzzy?: boolean) => string
 }
 
 // java stack

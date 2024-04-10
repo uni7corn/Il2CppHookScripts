@@ -273,11 +273,19 @@ export class HookerBase {
         let index :number = -1
         klass.fields.forEach((field: Il2Cpp.Field) => {
             let disp : string = `[${++index}]`.padEnd(paddingIndexCount, ' ')
-            disp += ptr(field.offset) + '  '
-            disp += `${field.handle}` + '  '
-            disp += `${field.name}`.padEnd(maxNameLen, ' ') + '   :   '
-            disp += `${field.type.name}`.padEnd(maxTypeLen, ' ') + '   '
-            disp += `[ class: ${field.type.class.handle} ]`
+            // let color :LogColor.C90 | LogColor.C36 = LogColor.C36
+            // try {
+            //     field.value 
+            // } catch (error) {
+            //     color = LogColor.C90
+            // }
+            // disp += ptr(field.offset) + '  '
+            // disp += `${field.handle}` + '  '
+            // disp += `${field.name}`.padEnd(maxNameLen, ' ') + '   :   '
+            // disp += `${field.type.name}`.padEnd(maxTypeLen, ' ') + '   '
+            // disp += `[ class: ${field.type.class.handle} ]`
+            // LOG(disp, color)
+            disp += `${field}`
             LOGD(disp)
         })
         newLine()
@@ -707,8 +715,8 @@ declare global {
     }
     var i: (filter?: string, sort?: boolean) => void
     var c: (imageOrName: string | NativePointer, filter: string) => void
-    var m: (klass: NativePointer, sort?: MethodSortType, detailed?: boolean) => void
-    var f: (klass: NativePointer) => void
+    var m: (klass: NativePointer | string | number, sort?: MethodSortType, detailed?: boolean) => void
+    var f: (klass: NativePointer | String | number) => void
     var F: (klass: NativePointer | number, instance: NativePointer | number) => void // 老版本写法已弃用
     var findClass: (name: string, fromAssebly?: string[], fromCache?: boolean) => NativePointer
     var fc: (name: string, fromAssebly?: string[]) => NativePointer

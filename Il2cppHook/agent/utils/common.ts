@@ -165,14 +165,14 @@ const mapValueToArray = (map: Map<any, any>) => {
     return list
 }
 
-var runOnMain = (UpDatePtr: NativePointer, Callback: Function) => {
-    if (Callback == undefined) return
+var runOnMain = (UpDatePtr?: NativePointer | Function, Callback?: Function) => {
+    if (UpDatePtr ==undefined && Callback == undefined) return
     if (typeof (UpDatePtr) == "function") {
         Callback = UpDatePtr
         UpDatePtr = getEventUpdate<NativePointer>(false)
-    }
-    A(UpDatePtr, () => {
-        if (Callback != undefined && Callback != null) {
+    } 
+    A(UpDatePtr as NativePointer, () => {
+        if (Callback != undefined && Callback != null && typeof(Callback) == "function") {
             try {
                 Callback()
             } catch (e) {
@@ -380,7 +380,7 @@ declare global {
     var getJclassName: (jclsName: NativePointer, ShouldRet: boolean) => string | undefined
     var checkCtx: (ctx: CpuContext, type?: "LR" | "PC" | "SP") => void | string
     // var filterDuplicateOBJ: (objstr: string, maxCount?: number) => number
-    var runOnMain: (UpDatePtr: NativePointer, Callback: Function) => void
+    var runOnMain: (UpDatePtr?:  | Function, Callback?: Function) => void
     var runOnNewThread: (Callback: Function) => void
     var SendMessage: (str0: string, str1: string, str2?: string) => void
     var SendMessageImpl: (platform: "IronSource" | "MaxSdkCallbacks" | "MoPubManager" | "TPluginsGameObject") => void

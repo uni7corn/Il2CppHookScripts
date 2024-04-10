@@ -1,6 +1,68 @@
 import { filterDuplicateOBJ } from "../../../../../../../../../../../utils/common"
 import { TMPro_TMP_Text_Impl as TMPro_TMP_Text } from "../TMP_Text/class"
 
+const enableDebugLog:boolean = false
+const enableHookFont:boolean = true
+const savedFonts:Il2Cpp.Object[] = []
+var choosedFont:Il2Cpp.Object | null = null
+var choosed_TMP_FontAsset:NativePointer = NULL
+
+// try hook Font.InvokeTextureRebuilt_Internal to modify font dynamically
+Il2Cpp.perform(()=>{
+    if (!enableHookFont) return
+
+    try {
+        // [-]UnityEngine.TextRenderingModule @ 0x75f0260930
+        //   [-]UnityEngine.TextRenderingModule.dll @ 0x75f025e3c0 | C:15
+        //   [-]Font @ 0x75f1686700 | M:12 | F:2 | N:UnityEngine
+        //     [-]internal static Void InvokeTextureRebuilt_Internal(Font font) @ MI: 0x75f1694bb0 & MP: 0x762f6283a8 & RP: 0x415e3a8
+        //       [-]font                | type: 0x762fc07d40 | @ class:0x75f1686700 | UnityEngine.Font
+        const class_Font = Il2Cpp.Domain.assembly('UnityEngine.TextRenderingModule').image.class('UnityEngine.Font')
+        const method_InvokeTextureRebuilt_Internal = class_Font.method('InvokeTextureRebuilt_Internal', 1).overload('UnityEngine.Font')
+        Interceptor.attach(method_InvokeTextureRebuilt_Internal.virtualAddress, {
+            onEnter: function (args: NativePointer[]) {
+                const obj = new Il2Cpp.Object(args[0])
+                if (enableDebugLog) LOGD(`called Font.InvokeTextureRebuilt_Internal( Font="${obj}" )`)
+                savedFonts.push(obj)
+            }
+        })
+    } catch (error) {
+        if (enableDebugLog) LOGE(`Hook Font.InvokeTextureRebuilt_Internal failed: ${error}`)   
+    }
+})
+
+const listFonts = () => {
+    if (!enableHookFont) throw new Error("Hook Font is not enabled")
+    if (savedFonts.length == 0) {
+        LOGE(`No font saved`)
+        return
+    }
+    newLine()
+    savedFonts.forEach((font, index) => {
+        LOGD(`[${index}] ${font.handle} -> ${font} `)
+    })
+    newLine()
+}
+
+const setFont = (index: number) => {
+    if (choosedFont != null) {
+        LOGE(`Font has been set`)
+        return
+    }
+    if (index < 0 || index >= savedFonts.length) {
+        LOGE(`Index out of range`)
+        return
+    }
+    
+    // ↓ class : TMP_FontAsset ↓
+    // public static TMP_FontAsset CreateFontAsset(Font font)
+    // public static TMP_FontAsset CreateFontAsset(Font font, Int32 samplingPointSize, Int32 atlasPadding, GlyphRenderMode renderMode, Int32 atlasWidth, Int32 atlasHeight, AtlasPopulationMode atlasPopulationMode, Boolean enableMultiAtlasSupport)
+
+    runOnMain(()=>{
+        choosed_TMP_FontAsset = Il2Cpp.Api.TMP_FontAsset._CreateFontAsset(savedFonts[index].handle)
+    })
+}
+
 // public static Void TrackText (Text t)
 // a(findClass("TextMesh"))
 // 用作查找拼接后的字符串
@@ -15,6 +77,7 @@ const B_Text = (): void => {
     let strMap = new Map()
 
     strMap.set("SETTINGS", "设置")
+    strMap.set("Setting", "SETTINGS")
     strMap.set("選擇角色", "选择角色")
     strMap.set("ADDED", "已添加")
     strMap.set("ON", "开")
@@ -61,16 +124,24 @@ const B_Text = (): void => {
             let aimStr = "|" + readU16(callFunction(["Unity.TextMeshPro", "TMP_Text", "get_text", 0], args[0])) + "|"
             if (filterDuplicateOBJ(String(args[0]), 30) == -1) return
             worksWithText(args[0], "TMP_Text")
-            LOGD("\n[TMP_Text]  " + args[0] + "\t" + aimStr + "\t" + getPlatformCtx(ctx).lr)
+            LOGD("\n[TMP_Text]\t" + args[0] + "\t" + aimStr + "\t" + getPlatformCtx(ctx).lr)
             if (strMap.size != 0) {
                 let repStr = strMap.get(aimStr.substring(1, aimStr.length - 1))
                 if (repStr != undefined) {
-                    callFunction(find_method("Unity.TextMeshPro", "TMP_Text", "set_text", 1), args[0], allocCStr(repStr))
+                    callFunction(find_method("Unity.TextMeshPro", "TMP_Text", "set_text", 1), args[0], allocUStr(repStr))
                     LOGH(" \n\t {REP} " + aimStr + " ---> " + repStr)
                 }
                 if (showGobj != undefined && showGobj == true) {
                     showGameObject(args[0])
                 }
+            }
+            if (enableHookFont && !choosed_TMP_FontAsset.isNull()) {
+                LOGZ("\n\t { FONT } " + new Il2Cpp.Object(Il2Cpp.Api.TMP_Text._get_font(args[0])))
+                const tmpObj = new Il2Cpp.Object(args[0])
+                // public Void set_font(TMP_FontAsset value)
+                tmpObj.tryMethod<void>("set_font", 1)!.invoke(choosed_TMP_FontAsset)
+                // TextMeshPro public Void UpdateFontAsset()
+                Il2Cpp.Api.TextMeshPro._UpdateFontAsset(args[0])
             }
         })
     }
@@ -85,9 +156,17 @@ const B_Text = (): void => {
             if (strMap.size != 0) {
                 let repStr = strMap.get(aimStr.substring(1, aimStr.length - 1))
                 if (repStr != undefined) {
-                    callFunction(find_method("Unity.TextMeshPro", "TextMeshPro", "set_text", 1), args[0], allocCStr(repStr))
-                    LOGH(" \n\t {REP} " + aimStr + " ---> " + repStr)
+                    callFunction(find_method("Unity.TextMeshPro", "TextMeshPro", "set_text", 1), args[0], allocUStr(repStr))
+                    LOGH("\n\t { REP } " + aimStr + " ---> " + repStr)
                 }
+            }
+            if (enableHookFont && !choosed_TMP_FontAsset.isNull()) {
+                LOGZ("\n\t { FONT } " + new Il2Cpp.Object(Il2Cpp.Api.TMP_Text._get_font(args[0])))
+                const tmpObj = new Il2Cpp.Object(args[0])
+                // public Void set_font(TMP_FontAsset value)
+                tmpObj.tryMethod<void>("set_font", 1)!.invoke(choosed_TMP_FontAsset)
+                // TextMeshPro public Void UpdateFontAsset()
+                Il2Cpp.Api.TextMeshPro._UpdateFontAsset(args[0])
             }
         })
     }
@@ -190,12 +269,11 @@ const B_Text = (): void => {
             try {
                 let startPtr = textPtr.add(p_size * 2)
                 let endPtr = Memory.scanSync(startPtr, (startPtr.readInt() * 0.5 + 3) * p_size, "00 00 00 00")[0]["address"]
-                // 每一行第一个位置加上一个 /t
-                hexdump(startPtr.add(p_size), {
+                LOGO("\t" + hexdump(startPtr.add(p_size), {
                     length: endPtr.sub(startPtr).sub(p_size).toInt32(),
                     header: false
-                }).split('\n').forEach((line: string) => LOGO(`\t${line}`))
-            } catch { }
+                }))
+            } catch (e) { }
         }
     }
 
@@ -254,6 +332,18 @@ const B_Text = (): void => {
 
 declare global {
     var B_Text: () => void
+
+    var listFonts: () => void
+    var setFont: (index: number) => void
+
+    var savedFonts: Il2Cpp.Object[]
+    var choosed_TMP_FontAsset: NativePointer
 }
 
 globalThis.B_Text = B_Text
+
+globalThis.listFonts = listFonts
+globalThis.setFont = setFont
+
+globalThis.savedFonts = savedFonts
+globalThis.choosed_TMP_FontAsset = choosed_TMP_FontAsset
