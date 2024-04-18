@@ -451,6 +451,7 @@ globalThis.breakWithStack = Breaker.breakWithStack
 globalThis.breakInline = Breaker.breakInline
 globalThis.breakMemRW = Breaker.breakMemRW
 globalThis.printDesertedMethods = Breaker.printDesertedMethods // 展示 已经被取消hook 或者 不显示的部分函数
+globalThis.prd = Breaker.printDesertedMethods // alias printDesertedMethods
 globalThis.bt = (mPtr: NativePointer | number) => b(AddressToMethod(mPtr))
 globalThis.BN = (namespace: string) => Breaker.addBreakPoint("", namespace) // <- alias B(`NameSpace`)
 globalThis.getPlatform = (): string => (Process.platform == "linux" && Process.pageSize == 0x4) ? "arm" : "arm64"
@@ -642,6 +643,7 @@ declare global {
     var getPlatformCtxWithArgV: <T extends CpuContext>(ctx: T, argIndex: number) => NativePointer | undefined
     var maxCallTimes: number
     var attathing: boolean
+    var prd: (filterName?: string) => void
     var printDesertedMethods: (filterName?: string) => void
     var printCurrentMethods: () => void
 }
