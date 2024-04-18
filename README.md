@@ -111,3 +111,9 @@ $ frida -FU -l ../_Ufunc.js
 OR
 
 open with vscode and search `globalthis.` to find more useage
+
+-------
+
+Support the author
+
+<img src="https://github.com/axhlzy/Il2CppHookScripts/assets/20512058/a2221499-0a70-4caf-b05e-b01d85f3b2c4" width="500" height="600">
