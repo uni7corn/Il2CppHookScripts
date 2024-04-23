@@ -73,16 +73,16 @@ const setFont = (index: number) => {
 // \n 0x0A | \r 0x0D | \t 0x09 | [空格] 0x20 | [换行] 0x0D 0x0A
 const B_Text = (): void => {
 
-    let mapRecord = new Map()
-    let strMap = new Map()
+    const strRecordMap = new Map()
+    const strReplaceMap = new Map()
 
-    strMap.set("SETTINGS", "设置")
-    strMap.set("Setting", "SETTINGS")
-    strMap.set("選擇角色", "选择角色")
-    strMap.set("ADDED", "已添加")
-    strMap.set("ON", "开")
-    strMap.set("Loading...", "加载中...")
-    strMap.set("More games", "更多游戏")
+    strReplaceMap.set("SETTINGS", "设置")
+    strReplaceMap.set("Setting", "SETTINGS")
+    strReplaceMap.set("選擇角色", "选择角色")
+    strReplaceMap.set("ADDED", "已添加")
+    strReplaceMap.set("ON", "开")
+    strReplaceMap.set("Loading...", "加载中...")
+    strReplaceMap.set("More games", "更多游戏")
 
     try {
         LOGD("Enable TMP_Text Hook".padEnd(30, " ") + "| class : " + findClass("TMP_Text"))
@@ -121,12 +121,12 @@ const B_Text = (): void => {
 
     function TMP_Text(showGobj: boolean) {
         A(find_method("Unity.TextMeshPro", "TMP_Text", "get_transform", 0), (args, ctx) => {
-            let aimStr = "|" + readU16(callFunction(["Unity.TextMeshPro", "TMP_Text", "get_text", 0], args[0])) + "|"
-            if (filterDuplicateOBJ(String(args[0]), 30) == -1) return
+            const aimStr = "|" + readU16(callFunction(["Unity.TextMeshPro", "TMP_Text", "get_text", 0], args[0])) + "|"
+            if (filterDuplicateOBJ(aimStr, 30) == -1) return
             worksWithText(args[0], "TMP_Text")
             LOGD("\n[TMP_Text]\t" + args[0] + "\t" + aimStr + "\t" + getPlatformCtx(ctx).lr)
-            if (strMap.size != 0) {
-                let repStr = strMap.get(aimStr.substring(1, aimStr.length - 1))
+            if (strReplaceMap.size != 0) {
+                const repStr = strReplaceMap.get(aimStr.substring(1, aimStr.length - 1))
                 if (repStr != undefined) {
                     callFunction(find_method("Unity.TextMeshPro", "TMP_Text", "set_text", 1), args[0], allocUStr(repStr))
                     LOGH(" \n\t {REP} " + aimStr + " ---> " + repStr)
@@ -149,12 +149,12 @@ const B_Text = (): void => {
     function TextMeshPro() {
         // A(find_method("Unity.TextMeshPro", "TextMeshPro", "get_transform", 0), (args) => {
         A(Il2Cpp.Api.TextMeshPro._get_transform, (args) => {
-            let aimStr = "|" + new TMPro_TMP_Text(args[0]).get_text() + "|"
-            if (filterDuplicateOBJ(String(args[0])) == -1) return
+            const aimStr = "|" + new TMPro_TMP_Text(args[0]).get_text() + "|"
+            if (filterDuplicateOBJ(aimStr) == -1) return
             worksWithText(args[0], "TextMeshPro")
             LOG("\n[TextMeshPro]  " + args[0] + "\t" + aimStr, LogColor.C35)
-            if (strMap.size != 0) {
-                let repStr = strMap.get(aimStr.substring(1, aimStr.length - 1))
+            if (strReplaceMap.size != 0) {
+                const repStr = strReplaceMap.get(aimStr.substring(1, aimStr.length - 1))
                 if (repStr != undefined) {
                     callFunction(find_method("Unity.TextMeshPro", "TextMeshPro", "set_text", 1), args[0], allocUStr(repStr))
                     LOGH("\n\t { REP } " + aimStr + " ---> " + repStr)
@@ -178,12 +178,11 @@ const B_Text = (): void => {
             worksWithText(args[0], "Text")
             if (showGameObj) new Il2Cpp.Component(args[0]).get_gameObject().showSelf()
         }, (ret, ctx) => {
-            let aimStr = "|" + readU16(ret) + "|"
-            if (filterDuplicateOBJ(String(ret)) == -1) return
-            getPlatformCtx
+            const aimStr = "|" + readU16(ret) + "|"
+            if (filterDuplicateOBJ(aimStr) == -1) return
             LOGG("\n[Text_Get]  " + getPlatformCtxWithArgV(ctx, 0) + "\t" + aimStr)
-            if (strMap.size != 0) {
-                let repStr = strMap.get(aimStr.substring(1, aimStr.length - 1))
+            if (strReplaceMap.size != 0) {
+                const repStr = strReplaceMap.get(aimStr.substring(1, aimStr.length - 1))
                 if (repStr != undefined) {
                     ret.replace(allocUStr(repStr))
                     // callFunction(find_method("UnityEngine.UI", 'Text', 'set_text', 1), p_size == 4 ? ctx.r0 : ctx.x0, allocStr(repStr, ""))
@@ -193,13 +192,13 @@ const B_Text = (): void => {
         })
 
         // A(find_method("UnityEngine.UI", "Text", "set_text", 1), (args, ctx) => {
-        A(Il2Cpp.Api.Text._set_text, (args, ctx) => {
-            if (filterDuplicateOBJ(String(args[1])) == -1) return
+        A(Il2Cpp.Api.Text._set_text, (args:NativePointer[], _ctx:CpuContext) => {
+            const aimStr = "|" + readU16(args[1]) + "|"
+            if (filterDuplicateOBJ(aimStr) == -1 || filterDuplicateOBJ(args[0].toString()) == -1) return
             worksWithText(args[0], "Text")
-            let aimStr = "|" + readU16(args[1]) + "|"
             LOGO("\n[Text_Set]  " + args[0] + "\t" + aimStr)
-            if (strMap.size != 0) {
-                let repStr = strMap.get(aimStr.substring(1, aimStr.length - 1))
+            if (strReplaceMap.size != 0) {
+                const repStr = strReplaceMap.get(aimStr.substring(1, aimStr.length - 1))
                 if (repStr != undefined) {
                     args[1] = allocUStr(repStr)
                     LOGH(` \n\t {REP} ${aimStr} ---> ${repStr}`)
@@ -213,12 +212,12 @@ const B_Text = (): void => {
 
     function HookTrackText() {
         A(find_method('UnityEngine.UI', 'FontUpdateTracker', 'TrackText', 1), (args) => {
-            let aimStr = "|" + callFunctionRUS(["UnityEngine.UI", 'Text', 'get_text', 0], args[0]) + "|"
-            if (filterDuplicateOBJ(String(callFunctionRUS(["UnityEngine.UI", 'Text', 'get_text', 0], args[0]))) == -1) return
+            const aimStr = "|" + callFunctionRUS(["UnityEngine.UI", 'Text', 'get_text', 0], args[0]) + "|"
+            if (filterDuplicateOBJ(aimStr) == -1) return
             LOGD(`\n[FontUpdateTracker] ${args[0]} \t ${aimStr}`)
             worksWithText(args[0], "Text")
-            if (strMap.size != 0) {
-                let repStr = strMap.get(aimStr.substring(1, aimStr.length - 1))
+            if (strReplaceMap.size != 0) {
+                const repStr = strReplaceMap.get(aimStr.substring(1, aimStr.length - 1))
                 if (repStr != undefined) {
                     args[1] = allocUStr(repStr)
                     LOGH(` \n\t {REP} ${aimStr} ---> ${repStr}`)
@@ -229,12 +228,12 @@ const B_Text = (): void => {
 
     function HookPrint() {
         A(find_method('Assembly-CSharp', 'NGUIText', 'Print', 4), (args) => {
-            let aimStr = "|" + readU16(args[0]) + "|"
+            const aimStr = "|" + readU16(args[0]) + "|"
             if (filterDuplicateOBJ(aimStr) == -1) return
             LOGD(`\n[NGUIText] ${args[0]} \t ${aimStr}`)
             worksWithText(args[0], "Text", true)
-            if (strMap.size != 0) {
-                let repStr = strMap.get(aimStr.substring(1, aimStr.length - 1))
+            if (strReplaceMap.size != 0) {
+                let repStr = strReplaceMap.get(aimStr.substring(1, aimStr.length - 1))
                 if (repStr != undefined) {
                     args[0] = allocUStr(repStr)
                     LOGH(` \n\t {REP} ${aimStr} ---> ${repStr}`)
@@ -261,8 +260,8 @@ const B_Text = (): void => {
     }
 
     function worksWithText(textPtr: NativePointer, typeStr: string, printHex: boolean = false) {
-        if (mapRecord.get(typeStr) == null) {
-            mapRecord.set(typeStr, 1)
+        if (strRecordMap.get(typeStr) == null) {
+            strRecordMap.set(typeStr, 1)
             getTypeParent(textPtr)
         }
         if (printHex) {
