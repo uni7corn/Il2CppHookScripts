@@ -120,3 +120,6 @@ open with vscode and search `globalthis.` to find more useage
 Support the author
 
 <img src=https://github.com/axhlzy/Il2CppHookScripts/assets/20512058/618a0674-e5ad-4c0f-9435-f7e133d4b293 width="300" height="400">
+
+<!-- qq:597290673 -->
+<!-- tg:axhlzy -->
