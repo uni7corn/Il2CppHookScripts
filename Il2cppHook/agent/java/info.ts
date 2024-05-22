@@ -1,7 +1,7 @@
 import { Application } from "../expand/TypeExtends/mscorlibObj/Application/export"
 import { Environment } from "../expand/TypeExtends/mscorlibObj/Environment/export"
 import { SystemInfo } from "../expand/TypeExtends/mscorlibObj/SystemInfo/export"
-import { getMethodDesFromMethodInfo as DM, getModifier, methodToString } from "../bridge/fix/il2cppM"
+import { getMethodDesFromMethodInfo as DM, getMethodDesFromMethodInfo, getModifier, methodToString } from "../bridge/fix/il2cppM"
 import { Time } from "../expand/TypeExtends/mscorlibObj/Times/export"
 import { formartClass as FM } from "../utils/formart"
 import { distance } from "fastest-levenshtein"
@@ -269,6 +269,7 @@ const printExp = (filter: string = "", findAll: boolean = true, formartMaxLine: 
  * findMethodsInClass("Damage", "CNRDPassiveObject")
  * findMethodsInClass("", "CNRDPassiveObject", false)
  * findMethodsInClass("*", "CNRDPassiveObject")
+ * findMethodsInClass("public Int64*", "CNRDPassiveObject")
  */
 const findMethodsInClass = (filter: string, className: string | NativePointer | number, sort:boolean = true) => {
     let classInfo : null | Il2Cpp.Class
@@ -288,6 +289,8 @@ const findMethodsInClass = (filter: string, className: string | NativePointer | 
     }
 
     if (classInfo == null) throw new Error("Class is null")
+
+    const fullMatch :boolean = filter.length > 1 && filter.includes("*") 
 
     newLine()
     let index: number = 0
@@ -313,7 +316,16 @@ const findMethodsInClass = (filter: string, className: string | NativePointer | 
             const sizeofElement = FM.alignStr(`[ ${element.length} ]`, 8)
             LOGE(`>>> ${sizeofElement}| ${key}`)
             element.forEach((item: Il2Cpp.Method) => {
-                if (item.name.toLocaleLowerCase().includes(filter.toLowerCase())) {
+                let onMatch = false
+                try {
+                    // `match` might throw error
+                    onMatch = fullMatch ? 
+                        getMethodDesFromMethodInfo(item).toLocaleLowerCase().match(filter.toLowerCase()) != null : 
+                        item.name.toLocaleLowerCase().includes(filter.toLowerCase())
+                } catch (error) {
+                    // LOGZ(`Error: ${error}`)
+                }
+                if (onMatch) {
                     const virAddr = FM.alignStr(item.handle, p_size * 3) + (item.virtualAddress.isNull() ? '' : ` --->  ${FM.alignStr(item.relativeVirtualAddress, 12)}`)
                     const className = FM.alignStr(item.class.name, 20)
                     const result = `${FM.alignStr(`[${++index}]`, 6)} ${virAddr}  |  ${className} @ ${item.class.handle} |  ${DM(item)}`
