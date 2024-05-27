@@ -13,3 +13,5 @@ import "./std/_include"
 
 // 翻译
 // import "./translate/include"
+
+import './jdwp/jdwp'
