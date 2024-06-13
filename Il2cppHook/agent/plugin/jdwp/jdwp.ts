@@ -240,7 +240,7 @@ const configureJdwp = (jdwp_options:JdwpOptions)=>{
 
 //     lam_startJdwp();
 
-export function startJdwpThrad(){
+export function startJdwpThread(){
     stopJdwp()
 
     if (!isJdwpAllowed()) {
@@ -266,7 +266,7 @@ export function startJdwpThrad(){
 
 
 declare global {
-    var startJdwpThrad: ()=>void
+    var startJdwpThread: ()=>void
 }
 
-globalThis.startJdwpThrad = startJdwpThrad
+globalThis.startJdwpThread = startJdwpThread

@@ -21,6 +21,71 @@ const TODO_OTHERS = () => {
 
 }
 
+const test_stalker = () => {
+    Il2Cpp.perform(() => {
+
+        // [-]Assembly-CSharp @ 0xb400007bbc6fb6c0
+        //   [-]Assembly-CSharp.dll @ 0xb400007bbc6a7b20 | C:1115
+        //   [-]WindowSettingsTraffic @ 0xb400007b4c7661c0 | M:17 | F:16 | N:BoGD.UI.TRAFFIC
+        //     [-]private Void TweenPrivacyBtn() @ MI: 0xb400007bfcb5ded0 & MP: 0x7976fc873c & RP: 0x77f73c
+        const class_WindowSettingsTraffic = Il2Cpp.Domain.assembly("Assembly-CSharp").image.class("BoGD.UI.TRAFFIC.WindowSettingsTraffic")
+        const method_TweenPrivacyBtn = class_WindowSettingsTraffic.method("TweenPrivacyBtn")
+        showMethodInfo(method_TweenPrivacyBtn)
+
+        // modulemap include libil2cpp.so
+        const mdM = new ModuleMap((md: Module) => md.name == "libil2cpp.so")
+
+        Interceptor.attach(method_TweenPrivacyBtn.virtualAddress, {
+            onEnter(args) {
+                LOGD("TweenPrivacyBtn")
+                Stalker.follow(Process.getCurrentThreadId(), {
+                    events: {
+                        call: false,
+                        ret: false,
+                        exec: true,
+                        block: false,
+                        compile: false,
+                    },
+                    // onCallSummary: function (summary) {
+                    //     LOGW("onCallSummary")
+                    //     console.log(JSON.stringify(summary, null, 4))
+                    // },
+                    transform: function (iterator: StalkerArm64Iterator) {
+                        let instruction = iterator.next()
+                        do {
+                            if (mdM.has(instruction!.address)) {
+                                console.log(`${DebugSymbol.fromAddress(instruction?.address as NativePointer)} ${instruction}`)
+                                iterator.putCallout(printRet)
+                                // bl #
+                                if (instruction?.toString().includes("bl #")) {
+                                    const addr = ptr(instruction?.toString().split("bl #")[1].toString()!)
+                                    console.warn(DebugSymbol.fromAddress(addr))
+                                }
+                            }
+                            iterator.keep()
+                        } while ((instruction = iterator.next()) !== null)
+
+                    }
+                })
+            },
+            onLeave(retval) {
+                Stalker.unfollow(Process.getCurrentThreadId())
+                LOGD("TweenPrivacyBtn Leave")
+            }
+        })
+
+    })
+
+}
+
+function printRet(context: CpuContext) {
+    clear()
+    const thisContext = context as Arm64CpuContext
+    console.warn(`x0: ${thisContext.x0} x1: ${thisContext.x1} x2: ${thisContext.x2} x3: ${thisContext.x3} pc: ${thisContext.pc} sp: ${thisContext.sp} fp: ${thisContext.fp} lr: ${thisContext.lr}`)
+    console.log(`-> ${DebugSymbol.fromAddress(context.pc)} | ${Instruction.parse(context.pc)}`)
+    sem_wait()
+}
+
 var semlock = Memory.alloc(0x10)
 
 const sem_wait = () => {
@@ -40,11 +105,13 @@ declare global {
     var g_sem_lock: NativePointer
     var sem_wait: () => void
     var sem_post: () => void
+    var test_stalker: () => void
 }
 
 globalThis.g_sem_lock = semlock
 globalThis.sem_wait = sem_wait
 globalThis.sem_post = sem_post
+globalThis.test_stalker = test_stalker
 
 class PauseHelper {
 
@@ -205,7 +272,19 @@ class ExceptionTraceClass {
     }
 }
 
-function hookUnityExit(){
+const HookExit = () => {
+
+    Java.perform(function () {
+        Java.use("android.app.Activity").finish.overload().implementation = function () {
+            console.log("called android.app.Activity.Finish")
+            PrintStackTraceJava()
+        }
+        Java.use("java.lang.System").exit.implementation = function (code: number) {
+            console.log("called java.lang.System.exit(" + code + ")")
+            PrintStackTraceJava()
+        }
+    })
+
     Il2Cpp.perform(() => {
         // UnityEngine.CoreModule UnityEngine.Application Quit(Int32) : Void
         R(Il2Cpp.Domain.assembly("UnityEngine.CoreModule").image.class("UnityEngine.Application").method("Quit", 1).virtualAddress, (_srcCall: Function, arg0: NativePointer) => {
@@ -220,13 +299,6 @@ function hookUnityExit(){
             return ptr(0)
         })
     })
-}
-
-const HookExit = () => {
-
-    HookJavaExit()
-
-    hookUnityExit()
 }
 
 /**
