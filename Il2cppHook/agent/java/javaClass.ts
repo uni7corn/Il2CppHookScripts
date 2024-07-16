@@ -85,7 +85,7 @@ export function hookJavaClass(className: string | Java.Wrapper, callback: Method
 
 declare global {
     // var listJavaMethods: (className: string) => void
-    var hookJavaClass: (className: string | Java.Wrapper, callback: MethodCallback, passMethods?: Array<string>) => void
+    var hookJavaClass: (className: string | Java.Wrapper, callback?: MethodCallback, passMethods?: Array<string>) => void
 }
 
 // globalThis.listJavaMethods = listJavaMethods

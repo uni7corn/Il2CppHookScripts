@@ -4,40 +4,44 @@ globalThis.HookDialog = () => {
 
     Java.perform(() => {
 
-        let DialogFragment = Java.use('androidx.fragment.app.DialogFragment')
+        try {
+            let DialogFragment = Java.use('androidx.fragment.app.DialogFragment')
 
-        ///      ↓↓↓↓↓↓↓      androidx.appcompat.app.AlertDialog      ↓↓↓↓↓↓↓
+            ///      ↓↓↓↓↓↓↓      androidx.appcompat.app.AlertDialog      ↓↓↓↓↓↓↓
 
-        /// <reference path="https://cs.android.com/android/platform/superproject/main/+/main:external/javassist/sample/rmi/AlertDialog.java;l=22?q=AlertDialog&ss=android" />
-        // public void show(String message)
-        Java.use("androidx.appcompat.app.AlertDialog").show.implementation = function () {
-            let params: string = arguments.length == 0 ? '' : JSON.stringify(arguments)
-            LOGW(`CALLED -> ${this.toString()}`)
-            LOGZ(`\tPARAMS[${arguments.length}] -> ${params}`)
-            if (isShowPrintStack) PrintStackTraceJava()
-            return this.show.apply(this, arguments)
-        }
+            /// <reference path="https://cs.android.com/android/platform/superproject/main/+/main:external/javassist/sample/rmi/AlertDialog.java;l=22?q=AlertDialog&ss=android" />
+            // public void show(String message)
+            Java.use("androidx.appcompat.app.AlertDialog").show.implementation = function () {
+                let params: string = arguments.length == 0 ? '' : JSON.stringify(arguments)
+                LOGW(`CALLED -> ${this.toString()}`)
+                LOGZ(`\tPARAMS[${arguments.length}] -> ${params}`)
+                if (isShowPrintStack) PrintStackTraceJava()
+                return this.show.apply(this, arguments)
+            }
 
-        ///      ↓↓↓↓↓↓↓      androidx.fragment.app.DialogFragment      ↓↓↓↓↓↓↓
+            ///      ↓↓↓↓↓↓↓      androidx.fragment.app.DialogFragment      ↓↓↓↓↓↓↓
 
-        /// <reference path="https://cs.android.com/android/platform/superproject/+/master:frameworks/base/core/java/android/app/DialogFragment.java;l=263?q=DialogFragment&ss=android%2Fplatform%2Fsuperproject" />
-        // public int show(FragmentTransaction transaction, String tag)
-        DialogFragment.show.overload('androidx.fragment.app.FragmentTransaction', 'java.lang.String').implementation = function () {
-            let params: string = arguments.length == 0 ? '' : JSON.stringify(arguments)
-            LOGW(`CALLED -> ${this.toString()}`)
-            LOGZ(`\tPARAMS[${arguments.length}] -> ${params}`)
-            if (isShowPrintStack) PrintStackTraceJava()
-            return this.show.apply(this, arguments)
-        }
+            /// <reference path="https://cs.android.com/android/platform/superproject/+/master:frameworks/base/core/java/android/app/DialogFragment.java;l=263?q=DialogFragment&ss=android%2Fplatform%2Fsuperproject" />
+            // public int show(FragmentTransaction transaction, String tag)
+            DialogFragment.show.overload('androidx.fragment.app.FragmentTransaction', 'java.lang.String').implementation = function () {
+                let params: string = arguments.length == 0 ? '' : JSON.stringify(arguments)
+                LOGW(`CALLED -> ${this.toString()}`)
+                LOGZ(`\tPARAMS[${arguments.length}] -> ${params}`)
+                if (isShowPrintStack) PrintStackTraceJava()
+                return this.show.apply(this, arguments)
+            }
 
-        /// <reference path="https://cs.android.com/android/platform/superproject/+/master:frameworks/base/core/java/android/app/DialogFragment.java;l=236?q=DialogFragment&ss=android%2Fplatform%2Fsuperproject" />
-        // public void show(FragmentManager manager, String tag)
-        DialogFragment.show.overload('androidx.fragment.app.FragmentManager', 'java.lang.String').implementation = function () {
-            let params: string = arguments.length == 0 ? '' : JSON.stringify(arguments)
-            LOGW(`CALLED -> ${this.toString()}`)
-            LOGZ(`\tPARAMS[${arguments.length}] -> ${params}`)
-            if (isShowPrintStack) PrintStackTraceJava()
-            return this.show.apply(this, arguments)
+            /// <reference path="https://cs.android.com/android/platform/superproject/+/master:frameworks/base/core/java/android/app/DialogFragment.java;l=236?q=DialogFragment&ss=android%2Fplatform%2Fsuperproject" />
+            // public void show(FragmentManager manager, String tag)
+            DialogFragment.show.overload('androidx.fragment.app.FragmentManager', 'java.lang.String').implementation = function () {
+                let params: string = arguments.length == 0 ? '' : JSON.stringify(arguments)
+                LOGW(`CALLED -> ${this.toString()}`)
+                LOGZ(`\tPARAMS[${arguments.length}] -> ${params}`)
+                if (isShowPrintStack) PrintStackTraceJava()
+                return this.show.apply(this, arguments)
+            }
+        } catch (error) {
+            LOGE("DO NOT FOUND `androidx.fragment.app.DialogFragment`")
         }
 
         ///      ↓↓↓↓↓↓↓      android.app.Dialog      ↓↓↓↓↓↓↓
