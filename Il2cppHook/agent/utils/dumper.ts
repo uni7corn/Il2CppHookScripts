@@ -1,4 +1,21 @@
 /**
+ * list mem so
+ * @param filter filter path or so name
+ */
+function listSo(filter?: string) {
+    let mds = Process.enumerateModules()
+    if (filter != undefined && filter.length != 0) 
+        mds = mds.filter((md) => {return md.name.includes(filter) || md.path.includes(filter)})
+    newLine()
+    mds.forEach((md,index) => {
+        LOGD(`[ ${index} ] ${md.base} - ${md.base.add(md.size)} ${md.name}`)
+        LOGZ(`\t${ptr(md.size)} | ${md.path}`)
+    })
+    if (filter != undefined && filter.length != 0) 
+        LOGW(`Total: ${mds.length}`)
+}
+
+/**
  * 内存 dump so
  * @param soName 指定so名称
  */
@@ -51,10 +68,12 @@ function dump_mem(from: NativePointer, length: number, fileName: string | undefi
 }
 
 declare global {
+    var listSo: (filter?: string) => void
     var dumpSo: (soName: string) => void
     var dumpMem: (from: NativePointer, length: number, fileName: string | undefined) => void
 }
 
+globalThis.listSo = listSo
 globalThis.dumpSo = dump_so
 globalThis.dumpMem = dump_mem
 

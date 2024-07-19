@@ -343,12 +343,9 @@ const filterDuplicateOBJ = (objstr: string | String, maxCount: number = 10) => {
     if (debug) LOGW(`Enter filterDuplicateOBJ 2 ${localObjStr}`)
     if (GET_MAP(MapKAY.outFilterMap) == undefined || !GET_MAP(MapKAY.outFilterMap)!.has(localObjStr)) {
         SET_MAP_VALUE(MapKAY.outFilterMap, localObjStr, 0)
-        if (debug) LOGW(`3`)
         return 0
     }
-    if (debug) LOGW(`4`)
     const count = GET_MAP_VALUE<string, number>(MapKAY.outFilterMap, localObjStr) + 1
-    if (debug) LOGW(`5 -> ${count}`)
     SET_MAP_VALUE(MapKAY.outFilterMap, localObjStr, count)
     return (count >= maxCount) ? -1 : count
 }
