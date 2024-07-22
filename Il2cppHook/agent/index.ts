@@ -285,20 +285,61 @@ const HookExit = () => {
         }
     })
 
-    Il2Cpp.perform(() => {
-        // UnityEngine.CoreModule UnityEngine.Application Quit(Int32) : Void
-        R(Il2Cpp.Domain.assembly("UnityEngine.CoreModule").image.class("UnityEngine.Application").method("Quit", 1).virtualAddress, (_srcCall: Function, arg0: NativePointer) => {
-            // srcCall(arg0, arg1, arg2, arg3)
-            LOGE("called UnityEngine.Application.Quit(" + arg0.toInt32() + ")")
-            return ptr(0)
-        })
-        // UnityEngine.CoreModule UnityEngine.Application Quit() : Void
-        R(Il2Cpp.Domain.assembly("UnityEngine.CoreModule").image.class("UnityEngine.Application").method("Quit").virtualAddress, (_srcCall: Function) => {
-            // srcCall(arg0, arg1, arg2, arg3)
-            LOGE("called UnityEngine.Application.Quit()")
-            return ptr(0)
-        })
+    // android.app.Activity => public void finishAffinity()
+    Java.perform(()=>{
+        Java.use("android.app.Activity").finishAffinity.implementation = function() {
+            LOGD("called finishAffinity")
+            // this.finishAffinity()
+        }
     })
+
+    // System.exit(0);
+    Interceptor.replace(Module.findExportByName("libopenjdk.so", "Runtime_nativeExit")!,new NativeCallback(function(lenv, lcls, status) {
+        Java.perform(()=>{
+            let env = Java.vm.tryGetEnv()
+            let cls = Java.cast(lcls, Java.use("java.lang.Class"))
+            LOGD(`env => ${JSON.stringify(env)} | ${cls}`)
+        })
+        LOGW(`env => ${lenv} | ${lcls} |status => ${status}`)
+        PrintStackTraceNative(this.context)
+        return 0
+    }, 'int', ['pointer', 'pointer', 'pointer']))
+
+    // android.os.Process.killProcess(android.os.Process.myPid());
+    // void android_os_Process_sendSignal(JNIEnv* env, jobject clazz, jint pid, jint sig)
+    let android_os_Process_sendSignal_addr = Module.findExportByName("libandroid_runtime.so", "_Z29android_os_Process_sendSignalP7_JNIEnvP8_jobjectii")!
+    Interceptor.replace(android_os_Process_sendSignal_addr,new NativeCallback(function(lenv, lcls, pid, sig) {
+        Java.perform(()=>{
+            let env = Java.vm.tryGetEnv()
+            let cls = Java.cast(lcls, Java.use("java.lang.Object"))
+            LOGD(`env => ${JSON.stringify(env)} | ${cls}`)
+        })
+        LOGW(`env => ${lenv} | ${lcls} | pid => ${pid} | sig => ${sig}`)
+    }, 'void', ['pointer', 'pointer', 'pointer', 'pointer']))
+
+    // void kill(pid_t pid, int sig)
+    const kill_addr = Module.findExportByName("libc.so", "kill")!
+    Interceptor.replace(kill_addr, new NativeCallback(function(pid, sig) {
+        LOGW(`pid => ${pid} | sig => ${sig}`)
+        return 0
+    }, 'int', ['int', 'int']))
+
+    if (Process.findModuleByName("libil2cpp.so") != null) {
+        Il2Cpp.perform(() => {
+            // UnityEngine.CoreModule UnityEngine.Application Quit(Int32) : Void
+            R(Il2Cpp.Domain.assembly("UnityEngine.CoreModule").image.class("UnityEngine.Application").method("Quit", 1).virtualAddress, (_srcCall: Function, arg0: NativePointer) => {
+                // srcCall(arg0, arg1, arg2, arg3)
+                LOGE("called UnityEngine.Application.Quit(" + arg0.toInt32() + ")")
+                return ptr(0)
+            })
+            // UnityEngine.CoreModule UnityEngine.Application Quit() : Void
+            R(Il2Cpp.Domain.assembly("UnityEngine.CoreModule").image.class("UnityEngine.Application").method("Quit").virtualAddress, (_srcCall: Function) => {
+                // srcCall(arg0, arg1, arg2, arg3)
+                LOGE("called UnityEngine.Application.Quit()")
+                return ptr(0)
+            })
+        })
+    }
 }
 
 /**
