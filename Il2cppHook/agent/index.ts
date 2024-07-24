@@ -274,8 +274,6 @@ class ExceptionTraceClass {
     }
 }
 
-setImmediate(()=>{HookExit()})
-
 const HookExit = () => {
 
     LOGE(`CURRENT PID : ${Process.id}`)
