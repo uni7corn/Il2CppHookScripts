@@ -340,7 +340,7 @@ globalThis.fridaInfo = () => {
     LOGD(`${getLine(40)}\n`)
 }
 
-function getThreadName(tid: number) {
+export function getThreadName(tid: number = Process.id) {
     let threadName: string = "unknown"
     try {
         var file = new File("/proc/self/task/" + tid + "/comm", "r")

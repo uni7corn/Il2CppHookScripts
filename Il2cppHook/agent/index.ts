@@ -1,3 +1,5 @@
+import { getThreadName } from "./base/extends"
+import { SIGNAL } from "./base/enum"
 import "./include"
 
 setImmediate(() => main())
@@ -272,72 +274,167 @@ class ExceptionTraceClass {
     }
 }
 
+setImmediate(()=>{HookExit()})
+
 const HookExit = () => {
 
+    LOGE(`CURRENT PID : ${Process.id}`)
+
     Java.perform(function () {
-        Java.use("android.app.Activity").finish.overload().implementation = function () {
-            console.log("called android.app.Activity.Finish")
-            PrintStackTraceJava()
+        try {
+            Java.use("android.app.Activity").finish.overload().implementation = function () {
+                LOGD("called android.app.Activity.Finish")
+                PrintStackTraceJava()
+            }
+            LOGW(`Hook android.app.Activity.finish`)
+        } catch (error) {
+            LOGE(`ERROR Hook android.app.Activity.finish`)
         }
-        Java.use("java.lang.System").exit.implementation = function (code: number) {
-            console.log("called java.lang.System.exit(" + code + ")")
-            PrintStackTraceJava()
+
+        try {
+            // android.app.Activity => public void finishAffinity()
+            Java.perform(() => {
+                Java.use("android.app.Activity").finishAffinity.implementation = function () {
+                    LOGD("called finishAffinity")
+                    // this.finishAffinity()
+                }
+            })
+            LOGW(`Hook android.app.Activity.finishAffinity`)
+        } catch (error) {
+            LOGE(`ERROR Hook android.app.Activity.finishAffinity`)
+        }
+
+        try {
+            Java.use("java.lang.System").exit.implementation = function (code: number) {
+                console.log("called java.lang.System.exit(" + code + ")")
+                PrintStackTraceJava()
+            }
+            LOGW(`Hook java.lang.System.exit`)
+        } catch (error) {
+            LOGE(`ERROR Hook java.lang.System.exit`)
         }
     })
 
-    // android.app.Activity => public void finishAffinity()
-    Java.perform(()=>{
-        Java.use("android.app.Activity").finishAffinity.implementation = function() {
-            LOGD("called finishAffinity")
-            // this.finishAffinity()
-        }
-    })
+    // [*] function -> address: 0x7de78d6460 ( 0x7b460 )  quick_exit
+    //     quick_exit
+    //     [-] MD_Base: 0x7de785b000 | size: 0x61e000         <-  module:  libc.so
+    //     [-] RG_Base: 0x7de78ba000 | size: 0x3d000          <-  range:   r-x
+    try {
+        Interceptor.replace(Module.findExportByName("libc.so", "quick_exit")!, new NativeCallback(function (status: number) {
+            LOGE(`called libc.so::quick_exit(${status})`)
+            PrintStackTraceNative(this.context)
+            return 0
+        }, 'int', ['int']))
+        LOGW(`Hook libc.so::quick_exit @ ${Module.findExportByName("libc.so", "quick_exit")!}`)
+    } catch (error) {
+        LOGE(`ERROR Hook libc.so::quick_exit @ ${Module.findExportByName("libc.so", "quick_exit")!}`)
+    }
+
+    // [*] function -> address: 0x7de78f94d0 ( 0x9e4d0 )  _exit
+    //                                                _exit
+    //     [-] MD_Base: 0x7de785b000 | size: 0x61e000         <-  module:  libc.so
+    //     [-] RG_Base: 0x7de78f7000 | size: 0x3000           <-  range:   rwx
+    try {
+        Interceptor.replace(Module.findExportByName("libc.so", "_exit")!, new NativeCallback(function (status: number) {
+            LOGE(`called libc.so::_exit(${status})`)
+            PrintStackTraceNative(this.context)
+            return 0
+        }, 'int', ['int']))
+        LOGW(`Hook libc.so::_exit @ ${Module.findExportByName("libc.so", "_exit")!}`)
+    } catch (error) {
+        LOGE(`ERROR Hook libc.so::_exit @ ${Module.findExportByName("libc.so", "_exit")!}`)
+    }
 
     // System.exit(0);
-    Interceptor.replace(Module.findExportByName("libopenjdk.so", "Runtime_nativeExit")!,new NativeCallback(function(lenv, lcls, status) {
-        Java.perform(()=>{
-            let env = Java.vm.tryGetEnv()
-            let cls = Java.cast(lcls, Java.use("java.lang.Class"))
-            LOGD(`env => ${JSON.stringify(env)} | ${cls}`)
-        })
-        LOGW(`env => ${lenv} | ${lcls} |status => ${status}`)
-        PrintStackTraceNative(this.context)
-        return 0
-    }, 'int', ['pointer', 'pointer', 'pointer']))
+    try {
+        Interceptor.replace(Module.findExportByName("libopenjdk.so", "Runtime_nativeExit")!, new NativeCallback(function (lenv, lcls, status) {
+            LOGE(`called libopenjdk.so::_exit(${lenv}, ${lcls}, ${status})`)
+            Java.perform(() => {
+                let env = Java.vm.tryGetEnv()
+                let cls = Java.cast(lcls, Java.use("java.lang.Class"))
+                LOGD(`env => ${JSON.stringify(env)} | ${cls}`)
+            })
+            LOGW(`env => ${lenv} | ${lcls} |status => ${status}`)
+            PrintStackTraceNative(this.context)
+            return 0
+        }, 'int', ['pointer', 'pointer', 'pointer']))
+        LOGW(`Hook libopenjdk.so::_exit @ ${Module.findExportByName("libopenjdk.so", "Runtime_nativeExit")!}`)
+    } catch (error) {
+        LOGE(`ERROR Hook libopenjdk.so::_exit @ ${Module.findExportByName("libopenjdk.so", "Runtime_nativeExit")!}`)
+    }
 
     // android.os.Process.killProcess(android.os.Process.myPid());
     // void android_os_Process_sendSignal(JNIEnv* env, jobject clazz, jint pid, jint sig)
-    let android_os_Process_sendSignal_addr = Module.findExportByName("libandroid_runtime.so", "_Z29android_os_Process_sendSignalP7_JNIEnvP8_jobjectii")!
-    Interceptor.replace(android_os_Process_sendSignal_addr,new NativeCallback(function(lenv, lcls, pid, sig) {
-        Java.perform(()=>{
-            let env = Java.vm.tryGetEnv()
-            let cls = Java.cast(lcls, Java.use("java.lang.Object"))
-            LOGD(`env => ${JSON.stringify(env)} | ${cls}`)
-        })
-        LOGW(`env => ${lenv} | ${lcls} | pid => ${pid} | sig => ${sig}`)
-    }, 'void', ['pointer', 'pointer', 'pointer', 'pointer']))
+    try {
+        let android_os_Process_sendSignal_addr = Module.findExportByName("libandroid_runtime.so", "_Z29android_os_Process_sendSignalP7_JNIEnvP8_jobjectii")!
+        Interceptor.replace(android_os_Process_sendSignal_addr, new NativeCallback(function (lenv, lcls, pid, sig) {
+            LOGW(`called android.os.Process.sendSignal(${pid}, ${sig})`)
+            Java.perform(() => {
+                let env = Java.vm.tryGetEnv()
+                let cls = Java.cast(lcls, Java.use("java.lang.Object"))
+                LOGD(`env => ${JSON.stringify(env)} | ${cls}`)
+            })
+            LOGW(`env => ${lenv} | ${lcls} | pid => ${pid} | sig => ${sig}`)
+            PrintStackTraceNative(this.context)
+        }, 'void', ['pointer', 'pointer', 'pointer', 'pointer']))
+        LOGW(`Hook libandroid_runtime.so::Process_sendSignal @ ${Module.findExportByName("libandroid_runtime.so", "_Z29android_os_Process_sendSignalP7_JNIEnvP8_jobjectii")!}`)
+    } catch (error) {
+        LOGE(`ERROR Hook libandroid_runtime.so::Process_sendSignal @ ${Module.findExportByName("libandroid_runtime.so", "_Z29android_os_Process_sendSignalP7_JNIEnvP8_jobjectii")!}`)
+    }
 
     // void kill(pid_t pid, int sig)
-    const kill_addr = Module.findExportByName("libc.so", "kill")!
-    Interceptor.replace(kill_addr, new NativeCallback(function(pid, sig) {
-        LOGW(`pid => ${pid} | sig => ${sig}`)
-        return 0
-    }, 'int', ['int', 'int']))
+    try {
+        const kill_addr = Module.findExportByName("libc.so", "kill")!
+        Interceptor.replace(kill_addr, new NativeCallback(function (pid, sig) {
+            LOGE(`called libc.so::kill(${pid}, ${sig})`)
+            LOGZ(`\t[ ${getThreadName(pid)} ]`)
+            PrintStackTraceNative(this.context)
+            raise(SIGNAL.SIGTRAP)
+            return 0
+        }, 'int', ['int', 'int']))
+        LOGW(`Hook libc.so::kill @ ${Module.findExportByName("libc.so", "kill")!}`)
+    } catch (error) {
+        LOGE(`ERROR Hook libc.so::kill @ ${Module.findExportByName("libc.so", "kill")!}`)
+    }
+
+    // abort
+    try {
+        const abort_addr = Module.findExportByName("libc.so", "abort")!
+        Interceptor.replace(abort_addr, new NativeCallback(function () {
+            LOGE(`called libc.so::abort()`)
+            PrintStackTraceNative(this.context)
+            return 0
+        }, 'void', []))
+        LOGW(`Hook libc.so::abort @ ${Module.findExportByName("libc.so", "abort")!}`)
+    } catch {
+        LOGE(`ERROR Hook libc.so::abort @ ${Module.findExportByName("libc.so", "abort")!}`)
+    }
 
     if (Process.findModuleByName("libil2cpp.so") != null) {
         Il2Cpp.perform(() => {
-            // UnityEngine.CoreModule UnityEngine.Application Quit(Int32) : Void
-            R(Il2Cpp.Domain.assembly("UnityEngine.CoreModule").image.class("UnityEngine.Application").method("Quit", 1).virtualAddress, (_srcCall: Function, arg0: NativePointer) => {
-                // srcCall(arg0, arg1, arg2, arg3)
-                LOGE("called UnityEngine.Application.Quit(" + arg0.toInt32() + ")")
-                return ptr(0)
-            })
-            // UnityEngine.CoreModule UnityEngine.Application Quit() : Void
-            R(Il2Cpp.Domain.assembly("UnityEngine.CoreModule").image.class("UnityEngine.Application").method("Quit").virtualAddress, (_srcCall: Function) => {
-                // srcCall(arg0, arg1, arg2, arg3)
-                LOGE("called UnityEngine.Application.Quit()")
-                return ptr(0)
-            })
+            try {
+                // UnityEngine.CoreModule UnityEngine.Application Quit(Int32) : Void
+                R(Il2Cpp.Domain.assembly("UnityEngine.CoreModule").image.class("UnityEngine.Application").method("Quit", 1).virtualAddress, (_srcCall: Function, arg0: NativePointer) => {
+                    // srcCall(arg0, arg1, arg2, arg3)
+                    LOGE("called UnityEngine.Application.Quit(" + arg0.toInt32() + ")")
+                    return ptr(0)
+                })
+                LOGW(`Hook UnityEngine.Application.Quit(Int32) @ ${Il2Cpp.Domain.assembly("UnityEngine.CoreModule").image.class("UnityEngine.Application").method("Quit", 1).virtualAddress}`)
+            } catch (error) {
+                LOGE(`ERROR Hook UnityEngine.Application.Quit(Int32)`)
+            }
+
+            try {
+                // UnityEngine.CoreModule UnityEngine.Application Quit() : Void
+                R(Il2Cpp.Domain.assembly("UnityEngine.CoreModule").image.class("UnityEngine.Application").method("Quit").virtualAddress, (_srcCall: Function) => {
+                    // srcCall(arg0, arg1, arg2, arg3)
+                    LOGE("called UnityEngine.Application.Quit()")
+                    return ptr(0)
+                })
+                LOGW(`Hook UnityEngine.Application.Quit() @ ${Il2Cpp.Domain.assembly("UnityEngine.CoreModule").image.class("UnityEngine.Application").method("Quit").virtualAddress}`)
+            } catch (error) {
+                LOGE(`ERROR Hook UnityEngine.Application.Quit()`)
+            }
         })
     }
 }
