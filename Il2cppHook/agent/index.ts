@@ -15,5 +15,5 @@ const main = () => {
     // HookExit()
     // hookLogcat()
     // HookDialog()
-    hook_artMethodInvoke()
+    // hook_artMethodInvoke()
 }
