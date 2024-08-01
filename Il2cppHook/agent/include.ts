@@ -8,4 +8,4 @@ import "./java/include"
 import "./utils/include"
 import "./plugin/include"
 
-import "./globel"
+import "./fix"

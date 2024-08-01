@@ -124,19 +124,25 @@ enum android_LogPriority {
 const LOG_TAG: string = "ZZZ"
 const useCModule = false
 
+globalThis.logcat = (msg: string) => {
+    Java.perform(function () {
+        Java.use("android.util.Log").e("ZZZ", msg)
+    })
+}
+
 const testMem = Memory.alloc(0x30)
 // https://www.freecodecamp.org/news/all-emojis-emoji-list-for-copy-and-paste/#smileyfaceemojis
 // 20 F0 9F A4 A9 F0 9F A5 B0 F0 9F A4 96 F0 9F 92 AC F0 9F 92 BC E2 80 BC EF B8 8F 20 54 65 73 74 4D 65 73 73 61 67 65 20 7E
 testMem.writeByteArray([0x20, 0xF0, 0x9F, 0xA4, 0xA9, 0xF0, 0x9F, 0xA5, 0xB0, 0xF0, 0x9F, 0xA4, 0x96, 0xF0, 0x9F, 0x92, 0xAC, 0xF0, 0x9F, 0x92, 0xBC, 0xE2, 0x80, 0xBC, 0xEF, 0xB8, 0x8F, 0x20, 0x54, 0x65, 0x73, 0x74, 0x4D, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x20, 0x7E])
 
-globalThis.logcat_mem = (fmt: string = "%s", msg: NativePointer = testMem, tag: string = LOG_TAG, priority: android_LogPriority = android_LogPriority.ANDROID_LOG_INFO) => {
+globalThis.logcat_native = (fmt: string = "%s", msg: NativePointer = testMem, tag: string = LOG_TAG, priority: android_LogPriority = android_LogPriority.ANDROID_LOG_INFO) => {
     if (!useCModule) {
-        let logcat = new NativeFunction(Module.findExportByName("liblog.so", "__android_log_print")!, 'void', ['int', 'pointer', 'pointer', 'pointer'])
-        logcat(4, Memory.allocUtf8String(tag), Memory.allocUtf8String(fmt), msg)
+        const logcat_f = new NativeFunction(Module.findExportByName("liblog.so", "__android_log_print")!
+            , 'void', ['int', 'pointer', 'pointer', 'pointer'])
+        logcat_f(4, Memory.allocUtf8String(tag), Memory.allocUtf8String(fmt), msg)
     } else {
         var cmd = new CModule(`
         #include <stdio.h>
-    
         extern int __android_log_print(int, const char*, const char*, ...);
         void logcat(const char* fmt, const char* msg){
             __android_log_print(${priority}, "${tag}", fmt, msg);
@@ -146,8 +152,8 @@ globalThis.logcat_mem = (fmt: string = "%s", msg: NativePointer = testMem, tag: 
     }
 }
 
-globalThis.logcat = (fmt: string = "%s", msg: string = "TEST", tag: string = LOG_TAG, priority: android_LogPriority = android_LogPriority.ANDROID_LOG_INFO) => {
-    logcat_mem(fmt, Memory.allocUtf8String(msg), tag, priority)
+globalThis.logcat_test = (fmt: string = "%s", msg: string = "TEST", tag: string = LOG_TAG, priority: android_LogPriority = android_LogPriority.ANDROID_LOG_INFO) => {
+    logcat_native(fmt, Memory.allocUtf8String(msg), tag, priority)
 }
 
 declare global {
@@ -173,8 +179,9 @@ declare global {
     // var log: (...text: chalk.Chalk[] | string[]) => void
 
     // android logcat
-    var logcat: (fmt?: string, msg?: string, tag?: string, priority?: android_LogPriority) => void
-    var logcat_mem: (fmt?: string, msg?: NativePointer, tag?: string, priority?: android_LogPriority) => void
+    var logcat: (msg: string) => void // java
+    var logcat_test: (fmt?: string, msg?: string, tag?: string, priority?: android_LogPriority) => void // native test
+    var logcat_native: (fmt?: string, msg?: NativePointer, tag?: string, priority?: android_LogPriority) => void // orgin native
 }
 
 globalThis.LOG = Logger.LOG
