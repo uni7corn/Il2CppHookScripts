@@ -99,7 +99,7 @@ export class Breaker {
                 FC.printTitile(`Found : ClassName: ${clsTmp.name} @ ${clsTmp.handle}`)
                 innerImage(clsTmp.handle)
                 // innerImage(Il2Cpp.Domain.assembly("UnityEngine.AndroidJNIModule").image.class("UnityEngine.AndroidJNIHelper").handle)
-            } else if ("AUI") {
+            } else if (type == "AUI") {
                 innerImage(Il2Cpp.Domain.assembly("Assembly-CSharp").image.handle)
                 setTimeout(() => h("Update"), 3000)
             } else if (type == "Soon") {
@@ -560,13 +560,31 @@ globalThis.BFA = (filterStr: string, allImg: boolean = true): void => {
  * @returns 
  */
 globalThis.getPlatformCtxWithArgV = <T extends CpuContext>(ctx: T, argIndex: number): NativePointer | undefined => {
-    if ((ctx as ArmCpuContext).r0 != undefined) {
-        if (argIndex > 15 || argIndex < 0) throw new Error(`ARM32 -> argIndex ${argIndex} is out of range`)
-        return eval(`(ctx as ArmCpuContext).r${argIndex}`) as NativePointer
-    } else {
-        if (argIndex > 32 || argIndex < 0) throw new Error(`ARM64 -> argIndex ${argIndex} is out of range`)
-        return eval(`(ctx as Arm64CpuContext).x${argIndex}`) as NativePointer
+    if (Process.arch == "arm" || Process.arch == "arm64"){
+        if ((ctx as ArmCpuContext).r0 != undefined) {
+            // case arm32
+            if (argIndex >= 0 && argIndex <= 12) {
+                return eval(`ctx.r${argIndex}`) as NativePointer
+            } else {
+                if (argIndex == 13) return (ctx as ArmCpuContext).sp
+                if (argIndex == 14) return (ctx as ArmCpuContext).lr
+                if (argIndex == 15) return (ctx as ArmCpuContext).pc
+            }
+            throw new Error(`ARM32 -> argIndex ${argIndex} is out of range`)
+        } else {
+            // case arm64
+            if (argIndex >= 0 && argIndex <= 28) {
+                return eval(`ctx.x${argIndex}`) as NativePointer
+            } else {
+                if (argIndex == 29) return (ctx as Arm64CpuContext).fp
+                if (argIndex == 30) return (ctx as Arm64CpuContext).sp
+                if (argIndex == 31) return (ctx as Arm64CpuContext).lr
+                if (argIndex == 32) return (ctx as Arm64CpuContext).pc
+            }
+            throw new Error(`ARM64 -> argIndex ${argIndex} is out of range`)
+        }
     }
+    throw new Error(`ARCH NOT IMPL`)
 }
 
 declare global {
