@@ -16,7 +16,7 @@ export class Breaker {
 
     private static _maxCallTimes: number = 10     // 出现 ${maxCallTimes} 次后不再显示
     private static _detachTimes: number = 500     // 出现 ${detachTimes}  次后取消 hook
-    private static _callTimesInline: number = 0  // log行间暂时的编号
+    private static _callTimesInline: number = 0   // log行间暂时的编号
     public static map_attachedMethodInfos: Map<Il2Cpp.Method, InvocationListener> = new Map()
     private static map_methodInfo_callTimes: Map<Il2Cpp.Method, number> = new Map()
     private static array_methodInfo_detached: Array<Il2Cpp.Method> = new Array<Il2Cpp.Method>()
@@ -99,7 +99,7 @@ export class Breaker {
                 FC.printTitile(`Found : ClassName: ${clsTmp.name} @ ${clsTmp.handle}`)
                 innerImage(clsTmp.handle)
                 // innerImage(Il2Cpp.Domain.assembly("UnityEngine.AndroidJNIModule").image.class("UnityEngine.AndroidJNIHelper").handle)
-            } else if ("AUI") {
+            } else if (type == "AUI") {
                 innerImage(Il2Cpp.Domain.assembly("Assembly-CSharp").image.handle)
                 setTimeout(() => h("Update"), 3000)
             } else if (type == "Soon") {
@@ -214,7 +214,7 @@ export class Breaker {
         } catch { catchError(method) }
 
         function catchError(method: Il2Cpp.Method): void {
-            LOGE(methodToString(method, false, '[-]'))
+            LOGE(methodToString(method, false, '[!]'))
             if (Process.arch == "arm") {
                 let ins = method.virtualAddress.readPointer()
                 if (ins != null && ins.equals(0xE12FFF1E)) showErrorLog(ins)
@@ -562,10 +562,10 @@ globalThis.BFA = (filterStr: string, allImg: boolean = true): void => {
 globalThis.getPlatformCtxWithArgV = <T extends CpuContext>(ctx: T, argIndex: number): NativePointer | undefined => {
     if ((ctx as ArmCpuContext).r0 != undefined) {
         if (argIndex > 15 || argIndex < 0) throw new Error(`ARM32 -> argIndex ${argIndex} is out of range`)
-        return eval(`(ctx as ArmCpuContext).r${argIndex}`) as NativePointer
+        return eval(`((ctx as ArmCpuContext).r${argIndex})`) as NativePointer
     } else {
         if (argIndex > 32 || argIndex < 0) throw new Error(`ARM64 -> argIndex ${argIndex} is out of range`)
-        return eval(`(ctx as Arm64CpuContext).x${argIndex}`) as NativePointer
+        return eval(`((ctx as Arm64CpuContext).x${argIndex})`) as NativePointer
     }
 }
 

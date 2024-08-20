@@ -18,6 +18,7 @@ globalThis.getObjName = (mPtr: NativePointer): string => {
 
 globalThis.getObjClass = (mPtr: NativePointer): NativePointer => {
     if (typeof mPtr == "number") mPtr = ptr(mPtr)
+    if (typeof mPtr == "string" && (mPtr as string).startsWith("0x")) mPtr = ptr(mPtr)
     let obj = new UnityEngine_Object(mPtr)
     return obj.class.handle
 }

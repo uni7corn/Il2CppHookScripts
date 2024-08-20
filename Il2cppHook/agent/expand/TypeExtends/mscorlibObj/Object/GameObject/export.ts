@@ -5,7 +5,7 @@ import { setActiveT, setActiveTChange } from "../Component/export"
 import { checkExtends } from "../../ValueType/exports"
 import { allocP } from "../../../../../utils/alloc"
 
-enum activeStatus {
+export enum activeStatus {
     active = 1,
     inactive = 0,
     all = -1
@@ -28,9 +28,9 @@ globalThis.HookSetActive = (defaltActive: activeStatus | boolean = activeStatus.
 
     function innerSetActive(mPtr: GobjPtr, ctx: CpuContext) {
         if (mPtr.isNull()) return
-        let gameObject = new Il2Cpp.GameObject(ptr(mPtr as unknown as number))
+        const gameObject = new Il2Cpp.GameObject(ptr(mPtr as unknown as number))
         const currentActive: boolean = getPlatformCtxWithArgV(ctx, 1)!.isNull() ? false : true
-        const activeSelf: boolean = gameObject.get_activeSelf()
+        const _activeSelf: boolean = gameObject.get_activeSelf()
         if (filterString != "") {
             if (filterString instanceof Array) {
                 let isPass = false
@@ -66,7 +66,7 @@ globalThis.HookSetActive = (defaltActive: activeStatus | boolean = activeStatus.
 
         function printMsg() {
             if (!mPtr.isNull()) {
-                let strTmp = "public extern void SetActive( " + (currentActive ? 'true' : 'false') + " );  LR:" + checkCtx(ctx)
+                const strTmp = "public extern void SetActive( " + (currentActive ? 'true' : 'false') + " );  LR:" + checkCtx(ctx)
                 LOGW("\n" + getLine(strTmp.length))
                 LOGD(strTmp)
                 LOGO(getLine(strTmp.length / 2))

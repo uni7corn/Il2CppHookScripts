@@ -3,12 +3,22 @@ import { getThreadName } from "../base/extends"
 export function HookReflect(bt: boolean = true) {
     Java.perform(() => {
         let Method = Java.use('java.lang.reflect.Method')
-        Method.invoke.overload('java.lang.Object', '[Ljava.lang.Object;').implementation = function (obj: any, args: any) {
-            if (Hooks_value_hideJavaLog) return this.invoke(obj, args)
-            let params: string = args.length == 0 ? '' : JSON.stringify(args)
-            LOGW(`CALLED -> ${this.toString()}`)
-            LOGZ(`\tPARAMS[${args.length}] -> ${params}`)
-            if (bt) PrintStackTraceJava()
+        Method.invoke.overload('java.lang.Object', '[Ljava.lang.Object;').implementation = function (obj: any, args: string | any[]) {
+            const thisName = this.toString()
+            LOGW(`CALLED -> ${thisName}`)
+            if (thisName.includes('com.google.android.gms') 
+                ||thisName.includes('com.google.firebase') 
+                ||thisName.includes('com.adjust.sdk') 
+                ||thisName.includes('java.util.ArrayList') 
+                ||thisName.includes('java.util.HashMap') 
+                ||thisName.includes('android.security.net') 
+                ||thisName.includes('java.security.spec') 
+                ||thisName.includes('javax.net.ssl') 
+                ||thisName.includes('sun.misc.Unsafe') 
+            ){
+                return this.invoke(obj, args)
+            }
+            PrintStackTraceJava()
             return this.invoke(obj, args)
         }
     })
@@ -815,31 +825,35 @@ const HookExit = (bt: boolean = true) => {
         LOGE(`ERROR Hook libc.so::abort @ ${Module.findExportByName("libc.so", "abort")!}`)
     }
 
-    Il2Cpp.perform(() => {
-        try {
-            // UnityEngine.CoreModule UnityEngine.Application Quit(Int32) : Void
-            R(Il2Cpp.Domain.assembly("UnityEngine.CoreModule").image.class("UnityEngine.Application").method("Quit", 1).virtualAddress, (_srcCall: Function, arg0: NativePointer) => {
-                // srcCall(arg0, arg1, arg2, arg3)
-                LOGE("called UnityEngine.Application.Quit(" + arg0.toInt32() + ")")
-                return ptr(0)
-            })
-            LOGW(`Hook UnityEngine.Application.Quit(Int32) @ ${Il2Cpp.Domain.assembly("UnityEngine.CoreModule").image.class("UnityEngine.Application").method("Quit", 1).virtualAddress}`)
-        } catch (error) {
-            LOGE(`ERROR Hook UnityEngine.Application.Quit(Int32)`)
-        }
-
-        try {
-            // UnityEngine.CoreModule UnityEngine.Application Quit() : Void
-            R(Il2Cpp.Domain.assembly("UnityEngine.CoreModule").image.class("UnityEngine.Application").method("Quit").virtualAddress, (_srcCall: Function) => {
-                // srcCall(arg0, arg1, arg2, arg3)
-                LOGE("called UnityEngine.Application.Quit()")
-                return ptr(0)
-            })
-            LOGW(`Hook UnityEngine.Application.Quit() @ ${Il2Cpp.Domain.assembly("UnityEngine.CoreModule").image.class("UnityEngine.Application").method("Quit").virtualAddress}`)
-        } catch (error) {
-            LOGE(`ERROR Hook UnityEngine.Application.Quit()`)
-        }
-    })
+    try {
+        Il2Cpp.perform(() => {
+            try {
+                // UnityEngine.CoreModule UnityEngine.Application Quit(Int32) : Void
+                R(Il2Cpp.Domain.assembly("UnityEngine.CoreModule").image.class("UnityEngine.Application").method("Quit", 1).virtualAddress, (_srcCall: Function, arg0: NativePointer) => {
+                    // srcCall(arg0, arg1, arg2, arg3)
+                    LOGE("called UnityEngine.Application.Quit(" + arg0.toInt32() + ")")
+                    return ptr(0)
+                })
+                LOGW(`Hook UnityEngine.Application.Quit(Int32) @ ${Il2Cpp.Domain.assembly("UnityEngine.CoreModule").image.class("UnityEngine.Application").method("Quit", 1).virtualAddress}`)
+            } catch (error) {
+                LOGE(`ERROR Hook UnityEngine.Application.Quit(Int32)`)
+            }
+    
+            try {
+                // UnityEngine.CoreModule UnityEngine.Application Quit() : Void
+                R(Il2Cpp.Domain.assembly("UnityEngine.CoreModule").image.class("UnityEngine.Application").method("Quit").virtualAddress, (_srcCall: Function) => {
+                    // srcCall(arg0, arg1, arg2, arg3)
+                    LOGE("called UnityEngine.Application.Quit()")
+                    return ptr(0)
+                })
+                LOGW(`Hook UnityEngine.Application.Quit() @ ${Il2Cpp.Domain.assembly("UnityEngine.CoreModule").image.class("UnityEngine.Application").method("Quit").virtualAddress}`)
+            } catch (error) {
+                LOGE(`ERROR Hook UnityEngine.Application.Quit()`)
+            }
+        })
+    } catch (error) {
+        LOGE(error)
+    }
 }
 
 declare global {
