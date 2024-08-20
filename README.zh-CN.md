@@ -23,7 +23,7 @@
 - 解析挂载脚本 `showComponents` | `PrintHierarchyWithComponents` 
 - JNI RegisterNatives 挂钩（在 JNIHelper 中植入，默认关闭 [不稳定]），使用 JNIHelper.cacheRegisterNativeItem 获取信息 !测试！
 - 使用 QBDI 模拟函数的执行，使用 t(methoinfo) 或 traceFunction(mPtr) 启用替换钩子！测试！
-- :confused: :confused: :confused：
+- :confused: :confused: :confused:
 
 -------
 
@@ -95,7 +95,7 @@ $ frida -FU -l ../_Ufunc.js
 `frida --codeshare axhlzy/il2cpphookscripts -U -f ${PackageName}`
 
 > [!］npm 软件包可能无法及时更新，因此您可以考虑使用 `fat -c` 打开项目
-并使用 `github action` [Artifacts](https://github.com/axhlzy/Il2CppHookScripts/actions) 替换 _Ufunc.js 文件 :hushed：
+并使用 `github action` [Artifacts](https://github.com/axhlzy/Il2CppHookScripts/actions) 替换 _Ufunc.js 文件 :hushed:
 
 -------
 
