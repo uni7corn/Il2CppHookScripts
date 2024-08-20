@@ -11,6 +11,7 @@ globalThis.HookDialog = () => {
 
             /// <reference path="https://cs.android.com/android/platform/superproject/main/+/main:external/javassist/sample/rmi/AlertDialog.java;l=22?q=AlertDialog&ss=android" />
             // public void show(String message)
+            LOGD("[*] HOOK androidx.appcompat.app.AlertDialog")
             Java.use("androidx.appcompat.app.AlertDialog").show.implementation = function () {
                 let params: string = arguments.length == 0 ? '' : JSON.stringify(arguments)
                 LOGW(`CALLED -> ${this.toString()}`)
@@ -21,6 +22,7 @@ globalThis.HookDialog = () => {
 
             ///      ↓↓↓↓↓↓↓      androidx.fragment.app.DialogFragment      ↓↓↓↓↓↓↓
 
+            LOGD("[*] HOOK androidx.fragment.app.FragmentTransaction")
             /// <reference path="https://cs.android.com/android/platform/superproject/+/master:frameworks/base/core/java/android/app/DialogFragment.java;l=263?q=DialogFragment&ss=android%2Fplatform%2Fsuperproject" />
             // public int show(FragmentTransaction transaction, String tag)
             DialogFragment.show.overload('androidx.fragment.app.FragmentTransaction', 'java.lang.String').implementation = function () {
@@ -46,6 +48,7 @@ globalThis.HookDialog = () => {
 
         ///      ↓↓↓↓↓↓↓      android.app.Dialog      ↓↓↓↓↓↓↓
 
+        LOGD("[*] HOOK android.app.Dialog")
         Java.use('android.app.Dialog').show.overload().implementation = function () {
             let params: string = arguments.length == 0 ? '' : JSON.stringify(arguments)
             LOGW(`CALLED -> ${this.toString()}`)
@@ -58,6 +61,7 @@ globalThis.HookDialog = () => {
 
         let PopupWindow = Java.use("android.widget.PopupWindow")
 
+        LOGD("[*] HOOK android.widget.PopupWindow")
         /// <reference path="https://cs.android.com/android/platform/superproject/+/master:frameworks/base/core/java/android/widget/PopupWindow.java;l=1361?q=showAsDropDown&ss=android%2Fplatform%2Fsuperproject" />
         // public void showAsDropDown(View anchor)
         PopupWindow.showAsDropDown.overload('android.view.View').implementation = function () {

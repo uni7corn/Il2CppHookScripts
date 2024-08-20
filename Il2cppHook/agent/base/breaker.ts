@@ -562,10 +562,10 @@ globalThis.BFA = (filterStr: string, allImg: boolean = true): void => {
 globalThis.getPlatformCtxWithArgV = <T extends CpuContext>(ctx: T, argIndex: number): NativePointer | undefined => {
     if ((ctx as ArmCpuContext).r0 != undefined) {
         if (argIndex > 15 || argIndex < 0) throw new Error(`ARM32 -> argIndex ${argIndex} is out of range`)
-        return eval(`((ctx as ArmCpuContext).r${argIndex})`) as NativePointer
+        return eval(`(ctx as ArmCpuContext).r${argIndex}`) as NativePointer
     } else {
         if (argIndex > 32 || argIndex < 0) throw new Error(`ARM64 -> argIndex ${argIndex} is out of range`)
-        return eval(`((ctx as Arm64CpuContext).x${argIndex})`) as NativePointer
+        return eval(`(ctx as Arm64CpuContext).x${argIndex}`) as NativePointer
     }
 }
 
