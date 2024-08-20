@@ -74,7 +74,8 @@ $ fat -h
 
 -------
 
-[<img src=“https://github.com/codespaces/badge.svg” title=“在 Github 代码空间打开”>](https://codespaces.new/axhlzy/Il2CppHookScripts)
+[<img src="https://github.com/codespaces/badge.svg" title="Open in Github Codespace">](https://codespaces.new/axhlzy/Il2CppHookScripts)
+
 
 #### 编译
 ```sh
@@ -90,17 +91,11 @@ $ frida -U -f com.xxx.xxx -l ../_Ufunc.js
 $ frida -FU -l ../_Ufunc.js
 ```
 
--------
-
-#### 或者是这样使用（未及时更新）
+#### 或者是这样使用（未及时更新 且 需要科学上网）
 `frida --codeshare axhlzy/il2cpphookscripts -U -f ${PackageName}`
 
-> 需要科学上网
-
--------
-
-> [!］
-> npm 软件包可能无法及时更新，因此您可以考虑使用 `fat -c` 打开项目，并使用 `github action` [Artifacts](https://github.com/axhlzy/Il2CppHookScripts/actions) 替换 _Ufunc.js 文件。 :hushed：
+> [!］npm 软件包可能无法及时更新，因此您可以考虑使用 `fat -c` 打开项目
+并使用 `github action` [Artifacts](https://github.com/axhlzy/Il2CppHookScripts/actions) 替换 _Ufunc.js 文件 :hushed：
 
 -------
 
@@ -112,11 +107,11 @@ $ frida -FU -l ../_Ufunc.js
 
 使用 vscode 打开并搜索 `globalthis.` 以查找更多用法
 
--------
+
 
 请作者喝杯咖啡 (^_^)
 
-<img src=https://github.com/axhlzy/Il2CppHookScripts/assets/20512058/618a0674-e5ad-4c0f-9435-f7e133d4b293 width=“300” height=“400”>
+<img src=https://github.com/axhlzy/Il2CppHookScripts/assets/20512058/618a0674-e5ad-4c0f-9435-f7e133d4b293 width="300" height="400">
 
 <!-- qq:597290673 -->
 <!-- wx:axhlzy0922 -->
