@@ -1,5 +1,5 @@
 
-export enum TYPE_STR { U_STR, C_STR }
+export enum TYPE_STR { U_STR, C_STR, OC_STR }
 
 export type PTR = NativePointer | number
 

@@ -6,16 +6,16 @@ export function HookReflect(bt: boolean = true) {
         Method.invoke.overload('java.lang.Object', '[Ljava.lang.Object;').implementation = function (obj: any, args: string | any[]) {
             const thisName = this.toString()
             LOGW(`CALLED -> ${thisName}`)
-            if (thisName.includes('com.google.android.gms') 
-                ||thisName.includes('com.google.firebase') 
-                ||thisName.includes('com.adjust.sdk') 
-                ||thisName.includes('java.util.ArrayList') 
-                ||thisName.includes('java.util.HashMap') 
-                ||thisName.includes('android.security.net') 
-                ||thisName.includes('java.security.spec') 
-                ||thisName.includes('javax.net.ssl') 
-                ||thisName.includes('sun.misc.Unsafe') 
-            ){
+            if (thisName.includes('com.google.android.gms')
+                || thisName.includes('com.google.firebase')
+                || thisName.includes('com.adjust.sdk')
+                || thisName.includes('java.util.ArrayList')
+                || thisName.includes('java.util.HashMap')
+                || thisName.includes('android.security.net')
+                || thisName.includes('java.security.spec')
+                || thisName.includes('javax.net.ssl')
+                || thisName.includes('sun.misc.Unsafe')
+            ) {
                 return this.invoke(obj, args)
             }
             PrintStackTraceJava()
@@ -838,7 +838,7 @@ const HookExit = (bt: boolean = true) => {
             } catch (error) {
                 LOGE(`ERROR Hook UnityEngine.Application.Quit(Int32)`)
             }
-    
+
             try {
                 // UnityEngine.CoreModule UnityEngine.Application Quit() : Void
                 R(Il2Cpp.Domain.assembly("UnityEngine.CoreModule").image.class("UnityEngine.Application").method("Quit").virtualAddress, (_srcCall: Function) => {
@@ -856,6 +856,40 @@ const HookExit = (bt: boolean = true) => {
     }
 }
 
+globalThis.startActivity = (activityName: string): void => {
+
+    if (!activityName) {
+        throw new Error("activityName is required")
+    }
+
+    Java.perform(function () {
+        const ActivityThread = Java.use('android.app.ActivityThread')
+        const app = ActivityThread.currentApplication()
+        const context = app.getApplicationContext()
+        const Intent = Java.use('android.content.Intent')
+        const intent = Intent.$new()
+        intent.setClassName(context.getPackageName(), activityName)
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK.value)
+        context.startActivity(intent)
+        LOGD('Activity ' + activityName + ' has been started.')
+    })
+}
+
+globalThis.HookJavaIntent_getBooleanExtra = () => {
+    Java.perform(function () {
+        const Intent = Java.use('android.content.Intent')
+        Intent.getBooleanExtra.overload('java.lang.String', 'boolean').implementation = function (name: string, defaultValue: string) {
+            LOGD('Called getBooleanExtra:')
+            LOGD('Key: ' + name)
+            LOGD('Default value: ' + defaultValue)
+            let result = this.getBooleanExtra(name, defaultValue)
+            LOGD('Result: ' + result)
+            PrintStackTraceJava()
+            return false
+        }
+    })
+}
+
 declare global {
     var HookJavaReflect: (bt?: boolean) => void
     var HookJavaSharedPreferences: (bt?: boolean) => void
@@ -870,6 +904,9 @@ declare global {
     var HookPackageAndSign: () => void
     var HookJSONObject: (bt?: boolean) => void
     var hookSSL: () => void
+    var startActivity: (activity: string) => void
+
+    var HookJavaIntent_getBooleanExtra : ()=>void
 
     var hideJavaLog: (flag?: boolean) => void
 }

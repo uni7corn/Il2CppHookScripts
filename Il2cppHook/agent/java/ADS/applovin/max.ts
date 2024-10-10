@@ -5,6 +5,33 @@ export { }
 let recordCallStr: Map<string, AdEvent> = new Map()
 let recordSrcInfo: Map<string, string> = new Map()
 
+globalThis.showMediationDebugger = () => {
+    Java.perform(() => {
+        let MaxUnityPlugin = Java.use("com.applovin.mediation.unity.MaxUnityPlugin")
+        MaxUnityPlugin.showMediationDebugger()
+        
+        // MaxUnityPlugin["showMediationDebugger"].implementation = function () {
+        //     console.log('showMediationDebugger is called')
+        //     let ret = this.showMediationDebugger()
+        //     console.log('showMediationDebugger ret value is ' + ret)
+        //     return ret
+        // }
+    })
+}
+
+// com.applovin.mediation.unity.MaxUnityPlugin.showInterstitial
+globalThis.showInterstitial = (id:string = "d140bc612a5d8e68") => {
+    Java.perform(() => {
+        let MaxUnityPlugin = Java.use("com.applovin.mediation.unity.MaxUnityPlugin")
+        // public static void com.applovin.mediation.unity.MaxUnityPlugin.loadInterstitial(java.lang.String)
+        MaxUnityPlugin.loadInterstitial(id)
+        // public static boolean com.applovin.mediation.unity.MaxUnityPlugin.isInterstitialReady(java.lang.String)
+        let status = MaxUnityPlugin.isInterstitialReady(id)
+        LOGE(`isInterstitialReady => ${status}`)
+        MaxUnityPlugin.showInterstitial(id,"1","1")
+    })
+}
+
 const HookMaxCallBack = (jsonParse: boolean = true) => {
     // public void ForwardEvent(string eventPropsStr)
     let forwardEvent: NativePointer = find_method("MaxSdk.Scripts", "MaxSdkCallbacks", "ForwardEvent", 1)
@@ -58,6 +85,8 @@ declare global {
     var listMaxCallBack: (showSendMsg?: boolean) => void
     var onMaxInit: () => void
     var onMaxReward: () => void
+    var showMediationDebugger: () => void
+    var showInterstitial: () => void
 }
 
 globalThis.HookMaxCallBack = HookMaxCallBack

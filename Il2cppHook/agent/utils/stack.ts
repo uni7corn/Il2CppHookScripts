@@ -212,14 +212,14 @@ declare global {
     var stacktrace: (pc: NativePointer, fp: NativePointer, sp: NativePointer) => NativePointer[]
     var bts: (ctx: CpuContext) => void
 
-    var mem_regions: MemRegions[]
+    // var mem_regions: MemRegions[]
 }
 
 globalThis.hook_libsscronet = hook_libsscronet
 globalThis.find_mem_region = find_mem_region
 globalThis.stacktrace = stacktrace
 
-globalThis.mem_regions = mem_regions
+// globalThis.mem_regions = mem_regions
 
 // alias bts to stacktrace
 // use age ↓
