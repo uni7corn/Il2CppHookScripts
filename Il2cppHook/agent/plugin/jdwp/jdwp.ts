@@ -276,6 +276,7 @@ export function startJdwpThread() {
 
     LOGW(`\nUseage: 
         adb forward tcp:${Process.id} jdwp:${Process.id}
+        adb reverse tcp:${Process.id} tcp:${Process.id}
         jdb -attach ${Process.id}\n`)
 }
 
