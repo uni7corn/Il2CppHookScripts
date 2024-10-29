@@ -161,9 +161,11 @@ export function ab2str(buf: ArrayBuffer): string {
 }
 
 // ArrayBuffer -> hexString
-export function arrayBufferToHex(buffer: ArrayBuffer) {
+var cachePtr: NativePointer = NULL
+export function arrayBufferToHex(buffer: ArrayBuffer, cached: boolean = true) {
     const tempMem = Memory.alloc(buffer.byteLength)
     tempMem.writeByteArray(buffer)
+    if (cached) cachePtr = tempMem
     return hexdump(tempMem, { length: buffer.byteLength })
 }
 
