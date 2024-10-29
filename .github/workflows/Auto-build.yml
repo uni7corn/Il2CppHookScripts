@@ -42,7 +42,7 @@ jobs:
       #     git push --force-with-lease
 
       - name: Upload _Ufunc.js as artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact
         with:
           name: Ufunc-artifact
           path: Il2cppHook/_Ufunc.js
