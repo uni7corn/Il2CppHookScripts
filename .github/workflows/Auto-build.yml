@@ -21,7 +21,7 @@ jobs:
         uses: actions/setup-node@v3
 
       - name: Install dependencies
-        run: cd Il2cppHook && npm Install
+        run: cd Il2cppHook && npm install 
 
       - name: Build
         run: cd Il2cppHook && npm run build
