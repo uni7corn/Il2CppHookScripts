@@ -30,7 +30,7 @@ jobs:
         run: cd Il2cppHook && npm run compress
 
       - name: Upload _Ufunc.js as artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Ufunc-artifact
           path: Il2cppHook/_Ufunc.js
