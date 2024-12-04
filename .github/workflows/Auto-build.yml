@@ -16,21 +16,23 @@ jobs:
 
       - name: Setup Node.js
         uses: actions/setup-node@v3
-        with:
-          node-version: 16
-          cache: 'npm'
 
       - name: Install dependencies
         working-directory: Il2cppHook
-        run: npm install
+        run: |
+          cd Il2cppHook
+          npm install
 
       - name: Build
         working-directory: Il2cppHook
-        run: npm run build
+        run: |
+          cd Il2cppHook
+          npm run build
 
       - name: Compress
-        working-directory: Il2cppHook
-        run: npm run compress
+        run: |
+          cd Il2cppHook
+          npm run compress
 
       - name: Upload _Ufunc.js as artifact
         uses: actions/upload-artifact@v3

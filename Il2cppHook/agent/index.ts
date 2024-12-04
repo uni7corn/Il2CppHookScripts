@@ -3,7 +3,6 @@ import "./include"
 setImmediate(() => main())
 
 const main = () => {
-
     // pause()
     // setException()
     // HookExit()
@@ -13,5 +12,4 @@ const main = () => {
     // hookLogcat()
     // HookDialog()
     // hook_artMethodInvoke()
-
 }
