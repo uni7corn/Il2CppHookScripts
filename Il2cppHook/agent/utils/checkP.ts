@@ -23,6 +23,7 @@ setImmediate(() => {
 })
 
 export let checkPointer = (value: TYPE_CHECK_POINTER, throwErr: boolean = false, _showLog: boolean = false): NativePointer => {
+    if (Process.findModuleByName("libil2cpp.so") == null) return value as NativePointer
     if (baseAddress.isNull()) baseAddress = Il2Cpp.module.base
     if (baseAddress.isNull()) throw new Error("checkPointer: libil2cpp.so not found ! \n please call setBaseAddress first")
 
@@ -40,7 +41,7 @@ export let checkPointer = (value: TYPE_CHECK_POINTER, throwErr: boolean = false,
             case 'object':
                 if (value instanceof NativePointer) {
                     return calPointer(value)
-                } else if (value instanceof Array<string | number>) {
+                } else if (value instanceof Array) {
                     if (!checkValue(value as Array<string | number>)) {
                         if (throwErr) throw new Error("checkPointer: checkValue Error")
                         else return ptr(0)
@@ -158,7 +159,7 @@ globalThis.getBaseAddress = (): NativePointer => baseAddress
 globalThis.checkCmdInput = checkCmdInput
 
 declare global {
-    var checkPointer: (args: NativePointer | number) => NativePointer
+    var checkPointer: (args: NativePointer | number | string) => NativePointer
     var checkCmdInput: (mPtr: NativePointer | NativePointerValue | number | string | Function) => NativePointer
     var getSubBasePtr: (mPtr: NativePointer, mdName?: string) => NativePointer
     var getSubBaseDes: (mPtr: NativePointer, mdName?: string) => string

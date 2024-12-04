@@ -1,12 +1,12 @@
-import { enumNumToName } from "../bridge/fix/enum"
-import { methodToString } from "../bridge/fix/il2cppM"
-import { UnityEngine_Object } from "../expand/TypeExtends/mscorlibObj/Object/class"
-import { getObjName } from "../expand/TypeExtends/mscorlibObj/Object/export"
 import { UnityEngine_Color_Impl } from "../expand/TypeExtends/mscorlibObj/ValueType/Color/class"
-import { formartClass as FM } from "../utils/formart"
+import { UnityEngine_Object } from "../expand/TypeExtends/mscorlibObj/Object/class"
 import { readInt, readInt64, readSingle, readU16, readUInt } from "../utils/reader"
+import { getObjName } from "../expand/TypeExtends/mscorlibObj/Object/export"
+import { getMethodDesFromMethodInfo, methodToString } from "../bridge/fix/il2cppM"
+import { formartClass as FM } from "../utils/formart"
+import { enumNumToName } from "../bridge/fix/enum"
 
-class ValueResolve {
+export class ValueResolve {
 
     private cacheId: string = ""
     private method: Il2Cpp.Method
@@ -65,8 +65,9 @@ class ValueResolve {
     }
 
     // `value` looks like a `NativePointer[]` type, but it may actually be a `never` type
-    public setArgs(value: InvocationArguments): ValueResolve {
-        if (value == undefined) return this
+    // NativePointer[] === InvocationArguments
+    public setArgs(value: InvocationArguments | NativePointer[]): ValueResolve {
+        if (value == undefined || value.length == 0) return this
         if (value instanceof Array && (value.length === 0 || value.length < this.method.parameterCount)) return this
         this.args = value
         return this
@@ -99,15 +100,56 @@ class ValueResolve {
         return ValueResolve.fakeValue(args, type, this.method)
     }
 
+    public argsToArray(): Array<string> {
+        let argsArray: Array<string> = []
+        // LOGJSON(this.args)
+        if (!this.method.isStatic) {
+            // not static method
+            try {
+                argsArray[0] = `instance = ${new Il2Cpp.Object(ptr(String(this.args[0]))).toString()} @ ${this.args[0]}`
+            } catch {
+                argsArray[0] = `instance = ${String(this.args[0])}`
+            }
+            for (let i = 1; i <= this.method.parameterCount; i++) {
+                let argName = this.method.parameters[i - 1].name
+                try {
+                    argsArray[i] = `${argName} = '${this.resolve(i - 1)}'`
+                } catch (error) {
+                    argsArray[i] = `${argName} = 'NULL'`
+                }
+            }
+        } else {
+            // static method
+            for (let i = 0; i < this.method.parameterCount; i++) {
+                let argName = this.method.parameters[i].name
+                try {
+                    argsArray[i] = `${argName} = '${this.resolve(i)}'`
+                } catch (error) {
+                    argsArray[i] = `${argName} = 'NULL'`
+                }
+            }
+        }
+        return argsArray
+    }
+
+    public argsToString(): string {
+        return this.argsToArray().join(', ')
+    }
+
     public static fakeValue = (insPtr: NativePointer, type: Il2Cpp.Type, method: Il2Cpp.Method): string => {
         if (typeof insPtr == "number") insPtr = ptr(insPtr)
         if (typeof method == "number") method = new Il2Cpp.Method(ptr(method))
         if (type.handle.equals(1)) return new Il2Cpp.Object(insPtr).toString()
         if (type.isNull() || method.isNull()) return ""
+
+        // 这里不可以使用 insPtr 来获取class，因为有可能是一个空指针（enum，或者其他值的情况，不一定是指针）
+        // let obj : Il2Cpp.Object = new Il2Cpp.Object(insPtr)
+        // 只能通过type来获取，如下 `type.class`
+
+        if (!type.class.handle.isNull() && type.class.isEnum) return enumType()
         if (insPtr.isNull() && type.name != "System.Boolean" && !method.class.isEnum && !type.name.includes("Void")) return "NULL"
         if (!method.class.isNull() && type.name.endsWith("[]")) return arrayType()
         if (!method.class.isNull() && type.name.includes("Dictionary")) return dictionaryType()
-        if (!method.class.isNull() && method.class.isEnum) return enumType()
 
         return FakeCommonType(type, insPtr)
 
@@ -122,24 +164,16 @@ class ValueResolve {
         function enumType(): string {
             return `Enum : ${enumNumToName(insPtr.toInt32(), type.class.name)}`
         }
-
-        function getParentsStr(clsPtr: Il2Cpp.Class): string {
-            let ret = ""
-            while (true) {
-                let parent = clsPtr.parent
-                if (parent != null) {
-                    clsPtr = parent
-                    ret += clsPtr.name + "<---"
-                } else {
-                    // LOGD(ret)
-                    return ret
-                }
-            }
-        }
     }
 }
 
+export function FakeCommonTypeObj(il2cppObject: Il2Cpp.Object):string {
+    return FakeCommonType(il2cppObject.class.type, il2cppObject.handle)
+}
+
+// 类型解析
 export function FakeCommonType(type: Il2Cpp.Type, mPtr: NativePointer): string {
+    // LOGW(`FakeCommonType ${type.name} ${mPtr}`)
     switch (type.name) {
         case "System.Void":
             return ""
@@ -147,29 +181,78 @@ export function FakeCommonType(type: Il2Cpp.Type, mPtr: NativePointer): string {
             return !mPtr.isNull() ? "True" : "False"
         case "System.Int32":
             return readInt(mPtr).toString()
+        case "System.IntPtr":
+            if (mPtr.isNull()) return "null"
+            let disp: string = ''
+            try {
+                disp = `${new Il2Cpp.Method(mPtr).virtualAddress} -> ${getMethodDesFromMethodInfo(mPtr)}`
+            } catch (error) {
+                disp = DebugSymbol.fromAddress(mPtr).toString()
+            }
+            return disp
         case "System.UInt32":
             return readUInt(mPtr).toString()
         case "System.Int64":
             return readInt64(mPtr).toString()
         case "System.Single":
             return readSingle(mPtr).toString()
+        case "System.Double":
+            try {
+                return mPtr.add(Process.pointerSize * 2).readDouble().toString()
+            } catch (error) {
+                return `Parse Error ${error}`
+            }
         case "System.String":
             return readU16(mPtr)
         case "System.Object":
-            return getObjName(mPtr)
+            if (mPtr.isNull()) return "null"
+            return new Il2Cpp.Object(mPtr).toString()
         case "System.UnityEngine":
             return new UnityEngine_Object(mPtr).get_name()
         case "UnityEngine.Color":
             return new UnityEngine_Color_Impl(mPtr).toString()
+        case "UnityEngine.SceneManagement.Scene":
+            return getSceneName(mPtr)
         case "Vector2":
             return `${mPtr.readFloat()} ${mPtr.add(4).readFloat()}`
         default:
-            if (type.name.includes("System.Action")) return new mscorlib.Delegate(mPtr).toString()
+            let obj: Il2Cpp.Object = new Il2Cpp.Object(mPtr)
             try {
-                return new Il2Cpp.Object(mPtr).toString()
+                if (type.name.includes("System.Collections.Generic.List")) {
+                    const items = obj.tryField('_items')!
+                    let disp: string = `${items.value} | `
+                    disp += ` | size -> ${obj.tryField('_size')?.value}`
+                    disp += ` | items -> ${items.handle}`
+                    return disp
+                }
+            } catch (error) {
+                return obj.toString()
+            }
+            try {
+                if (type.name.includes("System.Collections.Generic.Dictionary")) {
+                    const entries = obj.tryField('_entries')!
+                    const count: number = obj.tryField<number>('_count')!.value
+                    let disp: string = `${entries.handle} | `
+                    disp += ` | count -> ${obj.tryField('_count')?.value}`
+                    for (let i = 0; i < count; i++) {
+                        let key = entries.handle.add(Process.pointerSize * 2).readPointer()
+                        let value = entries.handle.add(Process.pointerSize * 3).readPointer()
+                        disp += ` | ${new Il2Cpp.Object(key).toString()} -> ${new Il2Cpp.Object(value).toString()}`
+                    }
+                    return disp
+                }
+            } catch (error) {
+                return obj.toString()
+            }
+            try {
+                if (type.name.includes("System.Action")) return new mscorlib.Delegate(mPtr).toString(true)
+            } catch (error) {
+                return obj.toString()
+            }
+            try {
+                return obj.toString()
             } catch {
                 return mPtr.toString()
             }
     }
 }
-export default ValueResolve

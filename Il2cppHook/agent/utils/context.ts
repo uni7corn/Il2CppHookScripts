@@ -6,7 +6,7 @@ import { LogColor } from "../base/enum"
  * @param {Int} range 展示的范围
  * @param {Int} type 1:正向 2:反向(小端存储，同IDA)   不填写着以当前pointer为中心位置打印信息
  */
-var printCtx = (mPtr: NativePointer | number, range: number = 5, type: number = 0, redLine: LogColor = LogColor.WHITE, space: number = 0) => {
+export const printCtx = (mPtr: NativePointer | number, range: number = 5, type: number = 0, redLine: LogColor = LogColor.WHITE, space: number = 0) => {
     if (Process.arch != "arm") return
     mPtr = checkPointer(mPtr)
     if (mPtr.isNull()) return
@@ -36,10 +36,8 @@ var printCtx = (mPtr: NativePointer | number, range: number = 5, type: number = 
     }
 }
 
-globalThis.printCtx = printCtx
-
 declare global {
     var printCtx: (mPtr: NativePointer | number, range?: number, type?: number, redLine?: number, space?: number) => void
 }
 
-export { printCtx }
+globalThis.printCtx = printCtx

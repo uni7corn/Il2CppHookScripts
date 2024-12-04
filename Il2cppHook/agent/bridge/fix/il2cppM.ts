@@ -12,8 +12,7 @@ export const getMethodModifier = (methodPtr: NativePointer | number | Il2Cpp.Met
     } else {
         localMethod = new Il2Cpp.Method(methodPtr)
     }
-    let flags = localMethod.flags
-    return getModifier(flags)
+    return getModifier(localMethod.flags)
 }
 
 export const getModifier = (flags: number): string => {
@@ -67,7 +66,7 @@ export const getModifier = (flags: number): string => {
 export const getMethodDesFromMethodInfo = (methodPtr: NativePointer | number | Il2Cpp.Method): string => {
     if (typeof methodPtr == "number") methodPtr = ptr(methodPtr)
     if (methodPtr == null || methodPtr.isNull()) throw new Error("getMethodDesFromMethodPtr: methodPtr can't be null")
-    let localMethod: Il2Cpp.Method = methodPtr instanceof Il2Cpp.Method ? methodPtr : new Il2Cpp.Method(methodPtr)
+    const localMethod: Il2Cpp.Method = methodPtr instanceof Il2Cpp.Method ? methodPtr : new Il2Cpp.Method(methodPtr)
     let ret_str: string = ""
     ret_str += getMethodModifier(localMethod)
     // If it is a generic function, it will be with generic parameters, otherwise it will retain the name of the last point after the type
@@ -127,7 +126,7 @@ export const methodToArray = (method: Il2Cpp.Method | NativePointer | number): A
 
 //Il2Cpp.Method toString impl
 export const methodToString = (method: Il2Cpp.Method, simple: boolean = false, startText: string = '[*]'): string => {
-    let arr = methodToArray(method)
+    const arr = methodToArray(method)
     if (arr == undefined) throw new Error("methodToString: methodToArray return undefined")
     // ctor cctor
     if (simple) return `${arr[3]} ${(method.name.includes("ctor")) ? `   { class => ${arr[5]}( ${arr[4]} ) }` : ""}`
@@ -149,6 +148,8 @@ export const getMethodMaxArgNameLength = (method: Il2Cpp.Method): number => {
 }
 
 globalThis.methodToArray = methodToArray as any
+globalThis.getMethodSimple = methodToString
 declare global {
     var methodToArray: (method: Il2Cpp.Method | NativePointer | number) => Array<string | NativePointer>
+    var getMethodSimple: (method: Il2Cpp.Method, simple?: boolean, startText?: string) => string
 }

@@ -1,3 +1,24 @@
+/**
+ * list mem so
+ * @param filter filter path or so name
+ */
+function listSo(filter?: string) {
+    let mds = Process.enumerateModules()
+    if (filter != undefined && filter.length != 0) 
+        mds = mds.filter((md) => {return md.name.includes(filter) || md.path.includes(filter)})
+    newLine()
+    mds.forEach((md,index) => {
+        LOGD(`[ ${index} ] ${md.base} - ${md.base.add(md.size)} ${md.name}`)
+        LOGZ(`\t${ptr(md.size)} | ${md.path}`)
+    })
+    if (filter != undefined && filter.length != 0) 
+        LOGW(`Total: ${mds.length}`)
+}
+
+/**
+ * 内存 dump so
+ * @param soName 指定so名称
+ */
 function dump_so(soName: string = "libil2cpp.so") {
     const module = Process.getModuleByName(soName)
     LOGE(getLine(30))
@@ -10,6 +31,13 @@ function dump_so(soName: string = "libil2cpp.so") {
     dump_mem(module.base, module.size, fileName)
 }
 
+/**
+ * 内存 dump
+ * @param from 从哪里开始
+ * @param length 长度
+ * @param fileName 保存的文件名
+ * @returns 
+ */
 function dump_mem(from: NativePointer, length: number, fileName: string | undefined) {
     from = checkCmdInput(from)
     if (length <= 0) return
@@ -40,10 +68,12 @@ function dump_mem(from: NativePointer, length: number, fileName: string | undefi
 }
 
 declare global {
+    var listSo: (filter?: string) => void
     var dumpSo: (soName: string) => void
     var dumpMem: (from: NativePointer, length: number, fileName: string | undefined) => void
 }
 
+globalThis.listSo = listSo
 globalThis.dumpSo = dump_so
 globalThis.dumpMem = dump_mem
 

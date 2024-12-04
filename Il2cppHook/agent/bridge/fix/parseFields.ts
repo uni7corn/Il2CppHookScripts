@@ -46,14 +46,20 @@ export class FieldsParser {
     }
 
     fieldInstance(fieldName: string): Il2Cpp.Field | null {
-        if (this.mPtr.isNull()) return null
-        return this.mClass.field(fieldName)
+        if (this.mPtr.isNull() || this.mPtr == null) return null
+        let ret :Il2Cpp.Field | null
+        try {
+            ret = this.mClass.field(fieldName)
+        } catch (error) {
+            return null
+        }
+        return ret
     }
 
     fieldValue(fieldName: string): NativePointer {
-        if (this.mPtr.isNull()) return ptr(0)
+        if (this.mPtr.isNull() || this.mPtr == null) return ptr(0)
         try {
-            let field: Il2Cpp.Field | null = this.fieldInstance(fieldName)
+            const field: Il2Cpp.Field | null = this.fieldInstance(fieldName)
             if (field == null) return ptr(0)
             if (field.isStatic) return fakeStaticField(field).readPointer()
             return this.mPtr.add(this.fieldOffset(fieldName)).readPointer()
@@ -63,7 +69,7 @@ export class FieldsParser {
     }
 
     fieldOffset(fieldName: string): number {
-        let field: Il2Cpp.Field | null = this.fieldInstance(fieldName)
+        const field: Il2Cpp.Field | null = this.fieldInstance(fieldName)
         if (field == null) return -1
         return field.offset
     }
@@ -71,7 +77,7 @@ export class FieldsParser {
     toShow(retB: Boolean = false) {
         if (this.mPtr.isNull()) return
         newLine()
-        let titile = `Found ${this.mClass.fields.length} fields in class: ${this.mClass.name} (${this.mClass.handle})`
+        const titile = `Found ${this.mClass.fields.length} fields in class: ${this.mClass.name} (${this.mClass.handle})`
         this.mClass.fields.length == 0 ? LOGE(titile) : LOGO(titile)
         if (this.mClass.fields.length == 0) return newLine()
         LOGO(getLine(50))
@@ -79,17 +85,17 @@ export class FieldsParser {
         this.mClass.fields
             .sort((f1: Il2Cpp.Field, f2: Il2Cpp.Field) => f1.offset - f2.offset)
             .forEach((field: Il2Cpp.Field) => {
-                let index: string = FM.alignStr(`[${++countNum}]`, 6)
-                let offset: NativePointer = ptr(field.offset)
-                let modifier: string = getModifier(field.flags).trim()
-                let classDes: string = `${field.type.class.name} (${field.type.class.handle})`
-                let fieldName: string = field.name
-                LOGD(`${index}  ${offset} ${modifier} ${classDes}\t${fieldName}`) // 字段通用信息打印
+                const index: string = FM.alignStr(`[${++countNum}]`, 6)
+                const offset: NativePointer = ptr(field.offset)
+                const modifier: string = getModifier(field.flags).trim()
+                const classDes: string = `${field.type.class.name} (${field.type.class.handle})`
+                const fieldName: string = field.name
+                LOGD(`${index}  ${offset} ${modifier} ${classDes}\t${fieldName}`) // common info
                 let disp = dealWithSpecialType(field, this.mPtr)
-                let thisHandle: NativePointer = this.mPtr.add(field.offset)
-                let thisValue: NativePointer = thisHandle.readPointer()
-                let splitStr = "  --->  "
-                LOGZ(`\t${thisHandle}${splitStr}${FM.alignStr(thisValue)}${String(disp).length == 0 ? "" : splitStr}${disp}`)
+                const thisHandle: NativePointer = this.mPtr.add(field.offset)
+                const thisValue: NativePointer = thisHandle.readPointer()
+                const splitStr = "  --->  "
+                LOGZ(`\t${thisHandle}${splitStr}${FM.alignStr(thisValue)}${String(disp).length == 0 ? "" : splitStr}${disp}`) // value info
                 if (!retB) newLine()
             })
         LOGO(getLine(50))
@@ -97,7 +103,7 @@ export class FieldsParser {
 
     toString(): string {
         if (this.mPtr.isNull()) return ""
-        let retMap: Map<string, any> = new Map()
+        const retMap: Map<string, any> = new Map()
         this.mClass.fields
             .sort((f1: Il2Cpp.Field, f2: Il2Cpp.Field) => f1.offset - f2.offset)
             .forEach((field: Il2Cpp.Field) => {
@@ -117,19 +123,19 @@ const dealWithSpecialType = (field: Il2Cpp.Field, thisValueP: NativePointer): st
         return fakeStaticField(field).toString()
     // 对枚举的解析
     else if (field.type.class.isEnum) {
-        let value = thisValueP.add(field.offset)
+        const value = thisValueP.add(field.offset)
         return `Enum : ${enumNumToName(value.readPointer().toInt32(), field.type.class.name, field.type.class.handle)}`
     }
 
     if (thisValueP.isNull()) return ""
-    let thisValue: NativePointer = thisValueP.add(field.offset).readPointer()
+    const thisValue: NativePointer = thisValueP.add(field.offset).readPointer()
 
     return FakeCommonType(field.type, thisValue)
 }
 
 function fakeStaticField(field: Il2Cpp.Field): NativePointer {
     try {
-        let tmpOut: NativePointer = alloc()
+        const tmpOut: NativePointer = alloc()
         Il2Cpp.Api._fieldGetStaticValue(field.handle, tmpOut)
         return tmpOut
     } catch (error) {
@@ -164,10 +170,10 @@ globalThis.lfs = (mPtr: NativePointer, classHandle: NativePointer | string | obj
 
 // 解析实例的 fields 以及 class 父级 fields （p means parents）
 globalThis.lfp = (mPtr: NativePointer) => {
-    let classType: Array<mscorlib.Type> = (getTypeParent(mPtr) as Array<mscorlib.Type>).reverse().map((localType: mscorlib.Type) => {
-        let localT = new Il2Cpp.Class(localType.handle)
+    const classType: Array<mscorlib.Type> = (getTypeParent(mPtr) as Array<mscorlib.Type>).reverse().map((localType: mscorlib.Type) => {
+        const localT = new Il2Cpp.Class(localType.handle)
         if (localT.isAbstract) {
-            let objT = Il2Cpp.Image.corlib.class("System.Object")
+            const objT = Il2Cpp.Image.corlib.class("System.Object")
             return new mscorlib.Type(localT.inflate(objT).type.handle)
         }
         return localType

@@ -2,7 +2,6 @@ import { LogColor, PTR } from "../base/enum"
 import { ARGM } from "../base/globle"
 import { PTR2NativePtr } from "./common"
 
-// 读取浮点数 ptr().readFloat() === readSingle(ptr().readPointer())
 const readSingle = (value: NativePointer): number => allocP().writePointer(value).readFloat()
 
 const readBoolean = (value: NativePointer): boolean => alloc(1).writePointer(value).readU8() == 0x1
@@ -28,6 +27,15 @@ const readU16 = (mPtr: ARGM): string => {
         return mPtr.add(p_size * 2 + 4).readUtf16String()
     } catch { return "" }
 }
+
+// const readStdString_ = (str) => {
+//     str = ptr(str)
+//     const isTiny = (str.readU8() & 1) === 0;
+//     if (isTiny) {
+//         return str.add(1).readUtf8String();
+//     }
+//     return str.add(2 * Process.pointerSize).readPointer().readUtf8String();
+// }
 
 // funcTransform 自定义解析函数
 const showArray = (mPtr: ARGM, funcTransform?: (itemPtr: NativePointer, objName: string) => string): void => {
@@ -84,6 +92,14 @@ var seeHexA = (addr: PTR, length: number = 0x40, header: boolean = true, color: 
     }), color == undefined ? LogColor.WHITE : color)
 }
 
+// test code 
+rpc.exports = {
+    find_base_address: function (muduleName, offset = 0, length = 0x60) {
+        console.log("findBase muduleName: " + Module.findBaseAddress(muduleName))
+        return muduleName
+    }
+}
+
 const getFloat = (intNum: number): NativePointer => alloc(1).writeFloat(intNum).readPointer()
 
 export { readSingle, readBoolean, readInt, readUInt, readUInt64, readInt64, readU16, showArray, seeHexR, seeHexA, getFloat }
@@ -100,6 +116,7 @@ declare global {
     var seeHexR: (addr: PTR, length?: number, color?: LogColor | undefined) => void
     var seeHexA: (addr: PTR, length?: number, header?: boolean, color?: any | undefined) => void
     var getFloat: () => NativePointer
+    // var readStdString: (str: any) => void
 }
 
 globalThis.readSingle = readSingle

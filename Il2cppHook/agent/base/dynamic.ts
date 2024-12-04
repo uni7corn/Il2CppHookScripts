@@ -1,7 +1,20 @@
+import { OnEnterType, OnExitType } from "../utils/common"
+
+/**
+ * 这部分代码主要用来实现反射提前预加载指定程序集下的所有class以及方法，以便于实现类似命令行代码提示或者说是自动补全的功能
+ */
+
+// 过滤只加载指定的程序集 {全部加载会导致启动过慢，可能把项目费时代码写成一个cmodule或者是考虑是全部移植到cpp即可解决问题}
 Reflect.set(globalThis, "Assembly", {})
 
 // 是否启用动态加载
 const enable_dynamic = true
+// 是否简化类名
+// globalClassName { "Assembly.Assembly_CSharp.AndroidAgent" --简化为--> "AndroidAgent.SetPauseGame"}
+// AndroidAgent.SetPauseGame.hook() === b(AndroidAgent.SetPauseGame) { b(MethodInfo) }
+// AndroidAgent.SetPauseGame.hook((args,_ctx)=>{},(ret,_ctx)=>{}) === A(AndroidAgent.SetPauseGame.virtualAddress,(args,_ctx)=>{},(ret,_ctx)=>{})
+// 这个可能导致Module冲突被覆盖，故使用不了 Module.findExportByName("libc++.so", '__cxa_demangle')
+const globalClassName = false
 // 过滤 Assembly
 // const filter_assembly: string[] = []
 const filter_assembly: string[] = ["Assembly"]
@@ -40,21 +53,25 @@ const packClass = (clazz: Il2Cpp.Class) => {
     Reflect.set(methods, "hook", B.bind(null, clazz.handle))
     Reflect.set(methods, "show", m.bind(null, clazz.handle))
     Reflect.set(methods, "parents", showParentClass.bind(null, clazz.handle))
-    clazz.methods.forEach((method: Il2Cpp.Method) => {
-        let key = repName(method.name)
-        Reflect.set(methods, key, paskMethod(method))
-    })
+    clazz.methods.forEach((method: Il2Cpp.Method) => Reflect.set(methods, repName(method.name), packMethod(method)))
+    if (globalClassName) Reflect.set(globalThis, repName(clazz.name), methods)
     return methods
 }
 
-const paskMethod = (method: Il2Cpp.Method) => {
+const packMethod = (method: Il2Cpp.Method) => {
     Reflect.set(method, "handle", method.handle)
     Reflect.set(method, "show", showMethodInfo.bind(null, method.handle))
-    Reflect.set(method, "hook", b.bind(null, method.handle))
+    Reflect.set(method, "hook", (onEnter?: (args: NativePointer) => {}, onLeave?: (ret: NativePointer) => {}) => {
+        if (typeof onEnter == "function" || typeof onLeave == "function")
+            A.apply(null, [method.virtualAddress, onEnter as unknown as OnEnterType, onLeave as unknown as OnExitType])
+        else
+            b.apply(null, [method.handle])
+    })
     return method
 }
 
-export const showParentClass = (handle: NativePointer | Il2Cpp.Class) => {
+export const showParentClass = (handle: NativePointer | Il2Cpp.Class | string) => {
+    if (typeof handle === "string") handle = findClass(handle)
     let clazz: Il2Cpp.Class | null = handle instanceof Il2Cpp.Class ? handle : new Il2Cpp.Class(checkCmdInput(handle))
     let display: string = ""
     while (clazz != null && !clazz.isNull()) {
@@ -65,6 +82,7 @@ export const showParentClass = (handle: NativePointer | Il2Cpp.Class) => {
     LOGD(`\n${display}\n`)
 }
 
+// replace . and - to _
 const repName = (name: string): string => name.replace(/\./g, "_").replace(/-/g, "_")
 
 declare global {

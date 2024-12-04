@@ -1,6 +1,6 @@
 import { getMethodDesFromMethodInfo as GMD, getMethodModifier as GMM } from "../bridge/fix/il2cppM"
 import { formartClass as FM } from "../utils/formart"
-import { FieldAccess, LogColor } from "./enum"
+import { FieldAccess, LogColor, MethodSortType } from "./enum"
 import { cache } from "decorator-cache-getter"
 import { allocCStr } from "../utils/alloc"
 import { FakeCommonType } from "./valueResolve"
@@ -62,6 +62,7 @@ export class HookerBase {
     }
 
     static showClasses(imageOrName: string | NativePointer | number, filterNameSpace: string = "", filterClassName: string = ""): void {
+        // todo 这里想添加一个 c(methodinfo)
         let image: Il2Cpp.Image
         try {
             if (typeof imageOrName == "string") {
@@ -146,12 +147,15 @@ export class HookerBase {
 
     /**
      * showMethods
-     * @param mPtr class ptr
-     * @param detailed show detail info (default false)
+     * @param {NativePointer | String | number} mPtr class ptr | class name | methodinfo ptr
+     * @param {boolean} detailed show detail info (default false)
      * @returns 
      * @example
      * 
      * m("GameObject") 这种写法少数重名类可能会出问题
+     * 你应该先使用findClasses找到指定的类以后再使用m(classPtr)的形式进行调用查看
+     * 
+     * example1 ↓
      * 
      * [Pixel 4::XXX ]->  m(findClass("GameObject"),1) === m("GameObject")
 
@@ -180,7 +184,9 @@ export class HookerBase {
                             ---> retval     0xe9785470  <-  Component
             ......
 
-            [Pixel 4::XXX ]->  m(findClass("GameObject"))
+            example2 ↓
+
+            [Pixel 4::XXX ]->  m(findClass("GameObject")) === m("GameObject")
 
             -----------------------------------------------------
             | Found 46 Methods  in class: GameObject @ 0xe9792c10 |
@@ -193,8 +199,10 @@ export class HookerBase {
             [*] 0xa386d274 ---> 0xa6d245fc ---> 0xf235fc    |  public Component GetComponentInChildren(Type type,Boolean includeInactive)
             ......
      */
-    static showMethods(mPtr: NativePointer | String | number, detailed: boolean = false): void {
-        let klass: Il2Cpp.Class = HookerBase.inputCheck(mPtr)
+    static showMethods(input: NativePointer | String | number, sort: MethodSortType = MethodSortType.ADDRESS, detailed: boolean = false): void {
+        if (input instanceof NativePointer && input.isNull()) throw new Error("input can not be null")
+        if (typeof input == "string" && input.trim().length == 0) throw new Error("input can not be null")
+        let klass: Il2Cpp.Class = HookerBase.inputCheck(input)
         if (klass.methods.length == 0) return
         newLine()
         FM.printTitile(`Found ${klass.methods.length} Methods ${klass.isEnum ? "(enum) " : ""} in class: ${klass.name} @ ${klass.handle}`)
@@ -217,13 +225,32 @@ export class HookerBase {
         } else {
             // 不带参数解析的  => example 2
             // 分开展示泛型方法和非泛型方法 避免看起来混乱
-            klass.methods.filter((method: Il2Cpp.Method) => !method.virtualAddress.isNull()).forEach((method: Il2Cpp.Method) => {
-                LOGD(`[*] ${method.handle} ---> ${method.virtualAddress} ---> ${method.relativeVirtualAddress}\t|  ${GMD(method)}`)
-            })
+
+            let localMethods: Il2Cpp.Method[] = klass.methods
+            switch (sort) {
+                case MethodSortType.ADDRESS:
+                    localMethods = localMethods.sort((first, secend) => first.relativeVirtualAddress.compare(secend.relativeVirtualAddress))
+                    break
+                case MethodSortType.ACCESS:
+                    localMethods = localMethods.sort((first, second) => second.modifier.localeCompare(first.modifier))
+                    break
+                case MethodSortType.MethodName:
+                    localMethods = localMethods.sort((first, second) => second.name.localeCompare(first.name))
+                    break
+                case MethodSortType.ARGSCOUNT:
+                    localMethods = localMethods.sort((first, second) => first.parameterCount - second.parameterCount)
+                    break
+            }
+
+            localMethods.filter((method: Il2Cpp.Method) => !method.virtualAddress.isNull())
+                .forEach((method: Il2Cpp.Method) => {
+                    LOGD(`[*] ${method.handle} ---> ${method.virtualAddress} ---> ${method.relativeVirtualAddress}\t|  ${GMD(method)}`)
+                })
             newLine()
-            klass.methods.filter((method: Il2Cpp.Method) => method.virtualAddress.isNull()).forEach((method: Il2Cpp.Method) => {
-                LOGZ(`[*] ${method.handle}\t|  ${GMD(method)}`)
-            })
+            localMethods.filter((method: Il2Cpp.Method) => method.virtualAddress.isNull())
+                .forEach((method: Il2Cpp.Method) => {
+                    LOGZ(`[*] ${method.handle}\t|  ${GMD(method)}`)
+                })
             newLine()
         }
     }
@@ -236,7 +263,31 @@ export class HookerBase {
             return
         }
         FM.printTitile(`Found ${klass.fields.length} Fields ${klass.isEnum ? "(enum) " : ""}in class: ${klass.name} (${klass.handle})`)
-        klass.fields.forEach((field: Il2Cpp.Field) => LOGD(`[*] ${field.handle} ${field.type.name} ${field.toString()} [type:${field.type.class.handle}]`))
+        let maxNameLen: number = 0
+        let maxTypeLen: number = 0
+        let paddingIndexCount: number = klass.fields.length.toString().length + 4
+        klass.fields.forEach((field: Il2Cpp.Field) => {
+            maxNameLen = Math.max(maxNameLen, field.name.length)
+            maxTypeLen = Math.max(maxTypeLen, field.type.name.length)
+        })
+        let index :number = -1
+        klass.fields.forEach((field: Il2Cpp.Field) => {
+            let disp : string = `[${++index}]`.padEnd(paddingIndexCount, ' ')
+            // let color :LogColor.C90 | LogColor.C36 = LogColor.C36
+            // try {
+            //     field.value 
+            // } catch (error) {
+            //     color = LogColor.C90
+            // }
+            // disp += ptr(field.offset) + '  '
+            // disp += `${field.handle}` + '  '
+            // disp += `${field.name}`.padEnd(maxNameLen, ' ') + '   :   '
+            // disp += `${field.type.name}`.padEnd(maxTypeLen, ' ') + '   '
+            // disp += `[ class: ${field.type.class.handle} ]`
+            // LOG(disp, color)
+            disp += `${field}`
+            LOGD(disp)
+        })
         newLine()
     }
 
@@ -248,22 +299,30 @@ export class HookerBase {
             klass = HookerBase.checkType(input.trim())
         } else if (typeof input == "number") {
             if (Process.arch == "arm64" && (input.toString().length > 15))
-                throw new Error("\nNot support parameter typed number at arm64\n\n\tUse _FunctionName('0x...') instead\n")
+                throw new Error(`\nNot support parameter typed number at ${Process.arch}\n\n\tUse ('0x...') instead\n`)
             // arm32 使用 number
             klass = HookerBase.checkType(ptr(input))
         } else {
-            throw ("mPtr must be string('0x...') or NativePointer")
+            throw (`mPtr must be string('0x...') or NativePointer`)
         }
         return klass
     }
 
-    /** 优先从fromAssebly列表中去查找，找不到再查找其他Assebly 
-     *  fromCache 是否使用cache (tips: Class -> UnityEngine.CoreModule.Object/mscorlib.Object 得取消cache，指定fromAssebly)
-    */
+    // findClass cache
     private static map_cache_class = new Map<string, Il2Cpp.Class>()
+    /**
+     * 优先从fromAssebly列表中去查找，找不到再查找其他Assebly 
+     * fromCache 是否使用cache (tips: Class -> UnityEngine.CoreModule.Object/mscorlib.Object 得取消cache，指定fromAssebly)
+     * @param searchClassName 待查找的类名
+     * @param fromAssebly 优先查找的Assebly列表
+     * @param fromCache 是否使用cache
+     * @returns 
+     */
     static findClass(searchClassName: string, fromAssebly: string[] = ["Assembly-CSharp", "MaxSdk.Scripts", "mscorlib"], fromCache: boolean = true): NativePointer {
-        if (searchClassName == undefined) throw ("Search name can not be null or undefined")
-        if (typeof searchClassName != "string") throw ("findClass need a string value")
+        if (searchClassName as any instanceof NativePointer) return ptr(0)
+        if (searchClassName as any instanceof Number) return ptr(0)
+        if (searchClassName == undefined) throw (`Search name can not be null or undefined`)
+        if (typeof searchClassName != "string") throw (`findClass need a string value`)
         if (fromCache) {
             let cache: Il2Cpp.Class | undefined = HookerBase.map_cache_class.get(searchClassName)
             if (cache != undefined) return cache.handle
@@ -334,7 +393,7 @@ export class HookerBase {
                 }
             }
         }
-        if (methodInfo == undefined) throw new Error("Method not found")
+        if (methodInfo == undefined) throw new Error(`Method not found`)
         if (cmdCall) {
             showMethodInfo(methodInfo.handle)
         } else {
@@ -583,25 +642,45 @@ export class HookerBase {
 export const get_gc_instance = (inputClass: string | NativePointer | Il2Cpp.Class = "GameObject"): Array<Il2Cpp.Object> => {
     let localClass: Il2Cpp.Class
     if (inputClass instanceof NativePointer) {
-        if (inputClass.isNull()) throw new Error("inputClass can not be null")
+        if (inputClass.isNull()) throw new Error(`inputClass can not be null`)
         localClass = new Il2Cpp.Class(inputClass)
     } else if (inputClass instanceof Il2Cpp.Class) {
-        if (inputClass.isNull()) throw new Error("inputClass can not be null")
+        if (inputClass.isNull()) throw new Error(`inputClass can not be null`)
         localClass = inputClass
     } else if (typeof inputClass == "string") {
         let localC = findClass(inputClass)
-        if (localC.isNull()) throw new Error("If the class is not found, please pay attention to capitalization")
+        if (localC.isNull()) throw new Error(`If the class is not found, please pay attention to capitalization`)
         localClass = new Il2Cpp.Class(localC)
     } else {
-        throw new Error("inputClass type error")
+        throw new Error(`inputClass type error`)
     }
     return Il2Cpp.GC.choose(localClass)
 }
 
-export const show_gc_instance = (inputClass: string | NativePointer | Il2Cpp.Class = "GameObject"): void => get_gc_instance(inputClass).forEach((item: Il2Cpp.Object) => {
+export const show_gc_instance = (inputClass: string | NativePointer | Il2Cpp.Class): void => get_gc_instance(inputClass).forEach((item: Il2Cpp.Object) => {
     let localDes = FakeCommonType(item.class.type, item.handle)
     LOGD(`[*] ${item.handle}\t${localDes}`)
 })
+
+/**
+ * @example fakeGCInstance('TMP_Text', (instance)=>{return callFunctionRUS(findMethod('Unity.TextMeshPro',"TMPro.TMP_Text","get_text",0,[],false).virtualAddress,instance.handle)})
+ */
+export const fake_gc_instance = (inputClass: string | NativePointer | Il2Cpp.Class, mapFunction?: (item: Il2Cpp.Object) => string): void => {
+    if (typeof inputClass == "string") {
+        if (inputClass == "TMP_Text" && !mapFunction) {
+            mapFunction = (instance) => { return callFunctionRUS(find_method('Unity.TextMeshPro', "TMP_Text", "get_text", 0), instance.handle) }
+        }
+    }
+    get_gc_instance(inputClass)
+        .map((item: Il2Cpp.Object) => mapFunction ? mapFunction(item) : item)
+        .forEach((item: string | Il2Cpp.Object) => {
+            if (typeof item == "string") {
+                LOGD(`[*] ${item}`)
+            } else if (item instanceof Il2Cpp.Object) {
+                LOGD(`[*] ${item.handle}\t${item}`)
+            }
+        })
+}
 
 export const find_method = HookerBase.findMethodSync as find_MethodType
 
@@ -624,6 +703,9 @@ globalThis.af = (className: string) => B(findClass(className))
 globalThis.aui = () => B("AUI")
 globalThis.getGCInstance = get_gc_instance
 globalThis.showGCInstance = show_gc_instance
+globalThis.fakeGCInstance = fake_gc_instance
+
+globalThis.J = (fn: () => void) => Java.perform(fn)
 
 Il2Cpp.perform(() => globalThis.soAddr = Il2Cpp.module.base)
 
@@ -633,13 +715,14 @@ declare global {
     }
     var i: (filter?: string, sort?: boolean) => void
     var c: (imageOrName: string | NativePointer, filter: string) => void
-    var m: (klass: NativePointer, detailed?: boolean) => void
-    var f: (klass: NativePointer) => void
+    var m: (klass: NativePointer | string | number, sort?: MethodSortType, detailed?: boolean) => void
+    var f: (klass: NativePointer | String | number) => void
     var F: (klass: NativePointer | number, instance: NativePointer | number) => void // 老版本写法已弃用
     var findClass: (name: string, fromAssebly?: string[], fromCache?: boolean) => NativePointer
     var fc: (name: string, fromAssebly?: string[]) => NativePointer
     var af: (className: string) => void
     var aui: () => void
+    var J: (fn: () => void) => void // alias Java.perform
 
     var findMethod: findMethodType
     var find_method: find_MethodType
@@ -647,7 +730,8 @@ declare global {
     var MethodToShow: (methodInfo: Il2Cpp.Method) => void
 
     var getGCInstance: (inputClass?: string | NativePointer | Il2Cpp.Class) => Array<Il2Cpp.Object>
-    var showGCInstance: () => void
+    var showGCInstance: (inputClass: string | NativePointer | Il2Cpp.Class) => void
+    var fakeGCInstance: (inputClass: string | NativePointer | Il2Cpp.Class, mapFunction?: (item: Il2Cpp.Object) => string) => void
 
     var soAddr: NativePointerValue
 }

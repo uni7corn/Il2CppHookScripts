@@ -1,89 +1,178 @@
-import { soName } from '../../base/globle';
-import { VM, VMAction, GPRState, FPRState, CallbackPriority, VMError, SyncDirection } from './frida-qbdi'
+import { VM, VMAction, GPRState, FPRState, CallbackPriority, VMError, InstPosition, SyncDirection } from './frida-qbdi'
+import { methodToString } from '../../bridge/fix/il2cppM'
+import { ValueResolve } from '../../base/valueResolve'
 
 // https://qbdi.readthedocs.io/en/stable/api.html
 // https://qbdi.readthedocs.io/en/stable/get_started-frida.html#frida-qbdi-script
 // segment 1: Permission denied [SELinux] -> getenforce == Enforcing ? setenforce 0 : null
 
-const testCall = () => {
-    const vm = new VM()
-    LOGD(JSON.stringify(vm.version))
+// 已知问题 ：QBDI JNI模拟调用会出现栈检查错误 （CheckPossibleHeapValue）
+// ref : https://github.com/QBDI/QBDI/issues/243
 
-    let state: GPRState = vm.getGPRState()
-    let stack: NativePointer = vm.allocateVirtualStack(state, 0x100000)
-    LOGD(stack.toString())
+const UINT64_SIZE = 0x8         // 定义存放数据基本块大小
+const StackSize = 0x1000 * 10   // 定义栈大小
 
-    let funcPtr = Module.findExportByName(soName, "il2cpp_string_new")!
-    let res = vm.addInstrumentedModuleFromAddr(funcPtr.toString())
-    LOGD(`addInstrumentedModule => ${res}`)
+var QBDI_INIT = false
+var vm: VM
+var state: GPRState
+var stack: NativePointer = NULL
+var baseSP: NativePointer = NULL
 
-    // 前五条详细打 gpr
-    let data = Memory.alloc(p_size * 2).writeInt(5)
-    // 测试只显示前面20条指令，后面的就跳过了
-    data.add(p_size).writeInt(20)
-    let icbk = vm.newInstCallback(function (vm: VM, gpr: GPRState, _fpr: FPRState, data: NativePointer) {
-        let inst = vm.getInstAnalysis()
-        let count_0 = data.readInt()
-        if (count_0 > 0) {
-            gpr.dump()
-            data.writeInt(--count_0)
-        }
-        let count_1 = data.add(p_size).readInt()
-        if (count_1 > 0) {
-            LOGD(`${ptr(inst.address).toString()} ${inst.disassembly} ${inst.mnemonic}`)
-            data.add(p_size).writeInt(--count_1)
-        }
-        return VMAction.CONTINUE
-    })
-
-    let iid = vm.addCodeCB(0 as unknown as Readonly<{ PREINST: 0; POSTINST: 1; }>, icbk, data, CallbackPriority.PRIORITY_DEFAULT)
-    if (iid == VMError.INVALID_EVENTID) throw new Error("addCodeCB failed")
-
-    let ret = vm.call(funcPtr.toString(), [allocCStr("Hello world !")])
-    LOGD(`U16 ret => ${ret} | '${readU16(ret)}'`)
+const initQBDI = (size: number = StackSize) => {
+    if (QBDI_INIT) {
+        vm.clearAllCache()
+        return
+    }
+    // fakeStackCheck()
+    vm = new VM()
+    state = vm.getGPRState()
+    stack = vm.allocateVirtualStack(state, size)
+    baseSP = state.getRegister("SP")!
+    if (stack == NULL) throw new Error("allocateVirtualStack failed")
+    LOGD(`INIT QBDI VM -> Stack: ${stack} | SP: ${baseSP}`)
+    QBDI_INIT = true
 }
 
-const qbdi_replace = (mPtr: NativePointer) => {
-    let functionAddr = checkPointer(mPtr)
-    const vm = new VM()
-    let srcFunc: NativeFunction<NativePointer, [NativePointer, NativePointer, NativePointer, NativePointer, NativePointer]> = new NativeFunction(functionAddr, 'pointer', ['pointer', 'pointer', 'pointer', 'pointer', 'pointer'])
-    Interceptor.replace(functionAddr, new NativeCallback(function (arg0: NativePointer, arg1: NativePointer, arg2: NativePointer, arg3: NativePointer, arg4: NativePointer) {
-        LOGD(`called ${functionAddr}/${mPtr} | args => ${arg0} ${arg1} ${arg2} ${arg3} ${arg4}`)
-        // let ret = srcFunc(arg0, arg1, arg2, arg3, arg4)
-        Interceptor.revert(functionAddr)
+const init_CMOUDLE = () => {
+
+}
+
+// type ICBK_CALL = (vm: VM, gpr: GPRState, fpr: FPRState, data: NativePointer) => VMAction
+type ICBK_CALL = (vm: VM, gpr: GPRState, fpr: FPRState, data: NativePointer) => number
+
+const default_icbk = function (vm: VM, gpr: GPRState, _fpr: FPRState, _data: NativePointer) {
+    let inst = vm.getInstAnalysis()
+    let lastAddress: NativePointer = _data.readPointer()
+    if (lastAddress == NULL) baseSP = gpr.getRegister("SP")!
+    let index: UInt64 = _data.add(UINT64_SIZE * 1).readU64()
+    let startTime_ICBK: UInt64 = _data.add(UINT64_SIZE * 2).readU64()
+    let run_inst_count: UInt64 = _data.add(UINT64_SIZE * 3).readU64()
+    let currentAddress: NativePointer = ptr(inst.address)
+    let currentTime: UInt64 = new UInt64(Date.now())
+    let custTime = index.equals(0) ? 0 : currentTime.sub(startTime_ICBK)
+    let preText = `[ ${index.toString().padEnd(3, ' ')} | ${custTime} ms ]`.padEnd(18, ' ')
+    if (startTime_ICBK.equals(0)) _data.add(UINT64_SIZE * 2).writeU64(Date.now())
+
+    let forceInstLog = true
+    let needParseArgs = false
+    let asmOffset = baseSP.sub(gpr.getRegister("SP"))
+    if (lastAddress != NULL && (forceInstLog || !currentAddress.sub(lastAddress).equals(4))) {
+        let methodInfo: Il2Cpp.Method | null = AddressToMethodNoException(currentAddress)
+        if (methodInfo != null) {
+            _data.add(UINT64_SIZE * 1).writeU64(index.add(1))
+            LOGD(`${preText} ${asmOffset.toString().padEnd(8, ' ')} ${currentAddress} | ${methodInfo.handle} -> ${methodInfo.class.name}::${methodToString(methodInfo, true)}`)
+            let cacheID: string = `${_data.add(UINT64_SIZE * 1).readU64()} ${methodInfo.class.name}::${methodToString(methodInfo, true)}`
+            let argsLocal: NativePointer[] = Object.values(gpr.getRegisters())
+            if (needParseArgs) LOGO(`\t\t\t${new ValueResolve(cacheID, methodInfo).setArgs(argsLocal).argsToString()}`.padEnd(80, ' '))
+        }
+        if (!run_inst_count.equals(0) && (forceInstLog || run_inst_count.toNumber() % 1000 === 0)) {
+            let md: Module | null = Process.findModuleByAddress(currentAddress)
+            let extra = md == null ? "" : `${currentAddress.sub(md.base)} @ ${md.name}`.padEnd(30, ' ')
+            LOGZ(`${preText} ${asmOffset.toString().padEnd(8, ' ')} ${currentAddress} | ${extra} | INSC: ${run_inst_count.toString().padEnd(7, ' ')} | ${inst.disassembly}`)
+        }
+    }
+    _data.add(UINT64_SIZE * 3).writeU64(run_inst_count.add(1))
+    _data.writePointer(currentAddress)
+    return VMAction.CONTINUE
+}
+
+// 竞品 StalkerTracePath @ Il2cppHook\agent\base\extends.ts
+globalThis.traceFunction = (mPtr: NativePointer | string | number, icbk_function: ICBK_CALL | NativePointer = default_icbk, argsCount: number = 4, once: boolean = true) => {
+    if (mPtr == null) throw new Error("traceFunction : mPtr is null")
+    let function_ptr: NativePointer = NULL
+    if (mPtr instanceof NativePointer) function_ptr = mPtr
+    if (typeof mPtr == "string" || typeof mPtr == "number") function_ptr = ptr(mPtr)
+    if (icbk_function == NULL) icbk_function = default_icbk
+
+    initQBDI()
+
+    let syncRegs = true
+    type callBackType = NativeFunction<NativePointer, [NativePointer, NativePointer, NativePointer, NativePointer, NativePointer]>
+    let srcFunc: callBackType = new NativeFunction(function_ptr, 'pointer', ['pointer', 'pointer', 'pointer', 'pointer', 'pointer'])
+    var callback = new NativeCallback(function (_arg0, _arg1, _arg2, _arg3, _arg4) {
+        let args: NativePointer[] = []
+        for (let i = 0; i < argsCount; i++) args.push(arguments[i]);
+        LOGD(`\ncalled ${function_ptr} | args => ${args.join(' ')}`)
+        // let ret: NativePointer = srcFunc.apply(null, arguments as any)
+        Interceptor.revert(function_ptr)
         Interceptor.flush()
-        let state: GPRState = vm.getGPRState()
-        let stack: NativePointer = vm.allocateVirtualStack(state, 0x10000)
-        // state.synchronizeContext(this.context, SyncDirection.FRIDA_TO_QBDI as any)
-        vm.addInstrumentedModuleFromAddr(functionAddr.toString())
-        LOGD("p call " + (srcFunc as unknown as NativePointer).toString())
-        let retval = vm.call((srcFunc as unknown as NativePointer).toString(), [arg0, arg1, arg2, arg3, arg4])
-        // state.synchronizeContext(this.context, SyncDirection.QBDI_TO_FRIDA as any)
-        LOGD(`replace => ${retval} ${retval}`)
-        return retval
-    }, 'pointer', ['pointer', 'pointer', 'pointer', 'pointer', 'pointer', 'pointer']))
+        if (syncRegs) state.synchronizeContext(this.context, SyncDirection.FRIDA_TO_QBDI)
+        vm.addInstrumentedModuleFromAddr(function_ptr)
+        let icbk = vm.newInstCallback(icbk_function)
+        var extraInfo: NativePointer = Memory.alloc(UINT64_SIZE * 4)
+        extraInfo.add(UINT64_SIZE * 0).writePointer(NULL) // int64_t 记录上一次的地址
+        extraInfo.add(UINT64_SIZE * 1).writePointer(NULL) // int64_t 记录 index
+        extraInfo.add(UINT64_SIZE * 2).writePointer(NULL) // int64_t 开始时间
+        extraInfo.add(UINT64_SIZE * 3).writePointer(NULL) // int64_t 记录 run inst count
+        let status = vm.addCodeCB(InstPosition.PREINST, icbk, extraInfo, CallbackPriority.PRIORITY_DEFAULT)
+        if (status == VMError.INVALID_EVENTID) throw new Error("addCodeCB failed")
+        var startTime = Date.now()
+        LOGD(`VM START | CALL -> ${srcFunc} | at ${new Date().toLocaleTimeString()}`)
+        let vm_retval = vm.call(srcFunc, args)
+        if (syncRegs) state.synchronizeContext(this.context, SyncDirection.QBDI_TO_FRIDA)
+        LOGD(`VM STOP | RET => ${vm_retval} | cust ${Date.now() - startTime}ms`)
+        if (!once) Interceptor.replace(function_ptr, callback)
+        return vm_retval
+    }, 'pointer', ['pointer', 'pointer', 'pointer', 'pointer', 'pointer'])
+
+    try {
+        Interceptor.replace(function_ptr, callback)
+    } catch (error: any) {
+        if (error.message.includes("already replaced")) {
+            Interceptor.revert(function_ptr)
+            Interceptor.flush()
+            Interceptor.replace(function_ptr, callback)
+        } else throw error
+    }
 }
 
-/* qbdi test */
-globalThis.qbdi_test = () => {
-    // testCall()
-    //     test_replace(Module.findExportByName(soName, "il2cpp_string_new")!)
+globalThis.traceMethodInfo = (methodinfo: NativePointer | string | number, once?: boolean) => {
+    let localMethodPtr: NativePointer = NULL
+    if (methodinfo == null) throw new Error("traceMethodInfo : methodinfo is null")
+    if (typeof methodinfo == "string" && methodinfo.startsWith("0x")) localMethodPtr = ptr(methodinfo)
+    if (methodinfo instanceof NativePointer) localMethodPtr = methodinfo
+    if (typeof methodinfo == "number") localMethodPtr = ptr(methodinfo)
+    let method = new Il2Cpp.Method(localMethodPtr)
+    if (method.handle == null || method.virtualAddress == null) throw new Error("method is null")
+    traceFunction(method.virtualAddress, NULL, method.isStatic ? method.parameterCount : method.parameterCount + 1, once)
 }
 
-/* qdbi attach */
-globalThis.qat = (mPtr: NativePointer) => qbdi_replace(mPtr)
+globalThis.t = globalThis.traceMethodInfo
 
+// not stable
+globalThis.fakeStackCheck = () => {
+    // bool CheckPossibleHeapValue(ScopedObjectAccess& soa, char fmt, JniValueType arg)
+    // _ZN3art12_GLOBAL__N_111ScopedCheck22CheckPossibleHeapValueERNS_18ScopedObjectAccessEcNS0_12JniValueTypeE
+    let CheckPossibleHeapValue = Module.findExportByName("libart.so", "_ZN3art12_GLOBAL__N_111ScopedCheck22CheckPossibleHeapValueERNS_18ScopedObjectAccessEcNS0_12JniValueTypeE")
+    if (CheckPossibleHeapValue) {
+        let src_CheckPossibleHeapValue = new NativeFunction(CheckPossibleHeapValue, 'bool', ['pointer', 'pointer', 'int'])
+        Interceptor.replace(CheckPossibleHeapValue, new NativeCallback((soa: NativePointer, fmt: NativePointer, arg: number) => {
+            // let ret = src_CheckPossibleHeapValue(soa, fmt, arg)
+            // LOGD(`CheckPossibleHeapValue -> ${fmt} | ${arg}`)
+            return 1
+        }, 'bool', ['pointer', 'pointer', 'int']))
+    }
 
-/* qdbi attach log level (stack) */
-globalThis.qal = () => {
-    // todo
+    // bool CheckNonHeapValue(char fmt, JniValueType arg)
+    // _ZN3art12_GLOBAL__N_111ScopedCheck17CheckNonHeapValueEcNS0_12JniValueTypeE
+    let CheckNonHeapValue = Module.findExportByName("libart.so", "_ZN3art12_GLOBAL__N_111ScopedCheck17CheckNonHeapValueEcNS0_12JniValueTypeE")
+    if (CheckNonHeapValue) {
+        let SRC_CheckNonHeapValue = new NativeFunction(CheckNonHeapValue, 'bool', ['pointer', 'int'])
+        Interceptor.replace(CheckNonHeapValue, new NativeCallback((fmt: NativePointer, arg: number) => {
+            // let ret = src_CheckNonHeapValue(fmt, arg)
+            // LOGD(`CheckNonHeapValue -> ${fmt} | ${arg}`)
+            return 1
+        }, 'bool', ['pointer', 'int']))
+    }
 
 }
 
 declare global {
-    var qbdi_test: () => void
-    var qat: (mPtr: NativePointer) => void
-    var qal: () => void
+    var traceFunction: (mPtr: NativePointer, icbk_function?: ICBK_CALL | NativePointer, argsCount?: number, once?: boolean) => void
+    var traceMethodInfo: (methodinfo: NativePointer, once?: boolean) => void
+    var t: (methodinfo: NativePointer, once?: boolean) => void // alies traceMethodInfo
+
+    var fakeStackCheck: () => void
 }
 
 export { }

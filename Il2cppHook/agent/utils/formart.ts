@@ -5,7 +5,7 @@ export class formartClass {
     static printTitileA = (strTitle: string, color: LogColor = LogColor.C33): number => formartClass.printTitile(strTitle, color, color, color)
 
     static printTitile = (strTitle: string, Line1: LogColor = LogColor.C33, Line2: LogColor = LogColor.C33, Line3: LogColor = LogColor.C33): number => {
-        let len = strTitle.length + 2
+        const len = strTitle.length + 2
         LOG(` ${getLine(len)} `, Line1)
         LOG(`| ${strTitle} |`, Line2)
         LOG(` ${getLine(len)} `, Line3)
@@ -13,27 +13,27 @@ export class formartClass {
     }
 
     static linesMap = new Map()
-    static getLine = (length: number, fillStr: string = "-") => {
-        let key = length + "|" + fillStr
+    static getLine = (length: number, fillStr: string = '-') => {
+        const key = length + '|' + fillStr
         if (formartClass.linesMap.get(key) != null) return formartClass.linesMap.get(key)
-        for (var index = 0, tmpRet = ""; index < length; index++) tmpRet += fillStr
+        for (var index = 0, tmpRet = ''; index < length; index++) tmpRet += fillStr
         formartClass.linesMap.set(key, tmpRet)
         return tmpRet
     }
 
     static alignStr(str: any, size: number = p_size * 2 + 3, fillStr: string = "."): string {
         str = String(str)
-        let srcSize = str.length
+        const srcSize = str.length
         if (srcSize >= size) {
             str = str.substring(0, size - 1)
             str += fillStr
-        } else for (let i = size - srcSize; i > 0; i--) str += " "
+        } else for (let i = size - srcSize; i > 0; i--) str += ' '
         return str
     }
 
     static getTime = (): string => {
-        let today = new Date()
-        return today.getHours() + ":" + today.getMinutes() + ":" + today.getSeconds()
+        const today = new Date()
+        return today.getHours() + ':' + today.getMinutes() + ':' + today.getSeconds()
     }
 
     /**
@@ -65,13 +65,22 @@ export class formartClass {
     // 居中字符串
     static centerStr = (str: string = "...", size: number = Process.pointerSize + 2): string => {
         if (size <= str.length) return str
-        let paddingNum: number = (size - str.length) / 2
+        const paddingNum: number = (size - str.length) / 2
         return `${getLine(paddingNum, " ")}${str}${getLine(paddingNum, " ")}`
+    }
+
+    static padding = (str: string | NativePointer, len: number = 18, pad: string = ' ', end: boolean = true) => {
+        if (str instanceof NativePointer) str = str.toString()
+        if (str.length >= len) return str
+        if (end) return str.padEnd(len, pad)
+        else return str.padStart(len, pad)
     }
 }
 
 globalThis.insertStr = formartClass.insertStr
+globalThis.PD = formartClass.padding
 
 declare global {
     var insertStr: (str1: string, n: number, str2: string) => string
+    var PD: (str: string | NativePointer, len?: number, pad?: string, end?: boolean) => string
 }

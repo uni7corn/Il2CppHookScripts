@@ -46,7 +46,7 @@ export function GET_F<T>(type: EpFunc): T {
 }
 
 // 记录全局变量
-let MAP_GLOABE_OBJ = new Map<GKEYE, any>()
+const MAP_GLOABE_OBJ = new Map<GKEYE, any>()
 
 export const GET_G = (gKey: GKEY): any => MAP_GLOABE_OBJ.get(gKey)
 
@@ -61,9 +61,9 @@ export function SET_G(gKey: GKEY, obj: any): Map<GKEY, any> {
 
 export function GET_MAP<K, V>(tKay: MapKAY): Map<K, V> {
     if (MAP_GLOABE_OBJ.get(tKay)) {
-        return MAP_GLOABE_OBJ.get(tKay) as Map<K, V>
+        return MAP_GLOABE_OBJ.get(tKay)
     } else {
-        let tmp = new Map<K, V>()
+        const tmp = new Map<K, V>()
         SET_MAP(tKay, tmp)
         return tmp
     }
@@ -74,11 +74,11 @@ export function SET_MAP<K, V>(tKay: MapKAY, map: Map<K, V>): void {
 }
 
 export function SET_MAP_VALUE<K, V>(tKay: MapKAY, key: K, value: V): void {
-    SET_MAP(tKay, GET_MAP(tKay).set(key, value))
+    SET_MAP(tKay, GET_MAP(tKay)!.set(key, value))
 }
 
 export function GET_MAP_VALUE<K, V>(tKay: MapKAY, key: K): any {
-    return GET_MAP(tKay).get(key)
+    return GET_MAP(tKay)!.get(key)
 }
 
 export function GET_ARRAY<K>(tKay: ArrKAY): Array<K> {

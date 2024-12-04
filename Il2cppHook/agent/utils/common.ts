@@ -19,8 +19,8 @@ enum passValueKey {
 export type PassType = passValueKey | string
 
 let map_attach_listener = GET_MAP<string, InvocationListener>(MapKAY.map_attach_listener)
-type OnEnterType = (args: InvocationArguments, ctx: CpuContext, passValue: Map<PassType, any>) => void
-type OnExitType = (retval: InvocationReturnValue, ctx: CpuContext, passValue: Map<PassType, any>) => void
+export type OnEnterType = (args: InvocationArguments, ctx: CpuContext, passValue: Map<PassType, any>) => void
+export type OnExitType = (retval: InvocationReturnValue, ctx: CpuContext, passValue: Map<PassType, any>) => void
 const attachNative = (mPtr: ARGM, mOnEnter?: OnEnterType, mOnLeave?: OnExitType, needRecord: boolean = true): void => {
     if (typeof mPtr == "number") mPtr = ptr(mPtr)
     if (mPtr instanceof NativePointer && mPtr.isNull()) return
@@ -70,7 +70,7 @@ var cancelAllNopedFunction = () => arr_nop_addr.forEach((addr) => Interceptor.re
 
 //detach ---> A(mPtr)
 const detachAll = (mPtr?: ARGM) => {
-    let map_attach_listener = GET_MAP<string, InvocationListener>(MapKAY.map_attach_listener)
+    const map_attach_listener = GET_MAP<string, InvocationListener>(MapKAY.map_attach_listener)
     if (typeof mPtr == "number") mPtr = ptr(mPtr)
     if (mPtr == undefined) {
         map_attach_listener.clear()
@@ -165,14 +165,14 @@ const mapValueToArray = (map: Map<any, any>) => {
     return list
 }
 
-var runOnMain = (UpDatePtr: NativePointer, Callback: Function) => {
-    if (Callback == undefined) return
+var runOnMain = (UpDatePtr?: NativePointer | Function, Callback?: Function) => {
+    if (UpDatePtr ==undefined && Callback == undefined) return
     if (typeof (UpDatePtr) == "function") {
         Callback = UpDatePtr
         UpDatePtr = getEventUpdate<NativePointer>(false)
-    }
-    A(UpDatePtr, () => {
-        if (Callback != undefined && Callback != null) {
+    } 
+    A(UpDatePtr as NativePointer, () => {
+        if (Callback != undefined && Callback != null && typeof(Callback) == "function") {
             try {
                 Callback()
             } catch (e) {
@@ -185,9 +185,8 @@ var runOnMain = (UpDatePtr: NativePointer, Callback: Function) => {
 
 const runOnNewThread = (Callback: Function): NativePointer => {
     if (Callback == undefined) return ptr(0)
-    let callback = new NativeCallback(function (arg0, arg1, arg2, arg3) {
-        Callback.apply(null, arguments)
-        return ptr(0x0)
+    let callback = new NativeCallback(function (_arg0, _arg1, _arg2, _arg3) {
+        return Callback.apply(null, arguments)
     }, 'pointer', ['pointer', 'pointer', 'pointer', 'pointer'])
     let ntid = Memory.alloc(p_size)
     new NativeFunction(Module.findExportByName(null, "pthread_create")!, 'pointer', ['pointer', 'int', 'pointer', 'int'])(ntid, 0, callback, 0)
@@ -333,22 +332,41 @@ export const TIME_SIMPLE = (): string => new Date().toLocaleTimeString().split("
 /**
  * 大于最大出现次数返回值为 -1
  * 主要是为了过滤比如setActive中重复出现的一直频繁调用的obj
- * @param {String} objstr 重复出现的str 
+ * @param {String | string} objstr 重复出现的str 
  * @param {int} maxCount 最大出现次数
  * @returns ? -1
  */
-const filterDuplicateOBJ = (objstr: string, maxCount: number = 10) => {
-    if (!GET_MAP(MapKAY.outFilterMap).has(objstr)) {
-        SET_MAP_VALUE(MapKAY.outFilterMap, objstr, 0)
+const debug = false
+const filterDuplicateOBJ = (objstr: string | String, maxCount: number = 10) => {
+    if (debug) LOGW(`Enter filterDuplicateOBJ 1 ${objstr} ${maxCount}`)
+    const localObjStr : string = objstr + ''
+    if (debug) LOGW(`Enter filterDuplicateOBJ 2 ${localObjStr}`)
+    if (GET_MAP(MapKAY.outFilterMap) == undefined || !GET_MAP(MapKAY.outFilterMap)!.has(localObjStr)) {
+        SET_MAP_VALUE(MapKAY.outFilterMap, localObjStr, 0)
         return 0
     }
-    let count = Number(GET_MAP_VALUE(MapKAY.outFilterMap, objstr)) + 1
-    SET_MAP_VALUE(MapKAY.outFilterMap, objstr, count)
+    const count = GET_MAP_VALUE<string, number>(MapKAY.outFilterMap, localObjStr) + 1
+    SET_MAP_VALUE(MapKAY.outFilterMap, localObjStr, count)
     return (count >= maxCount) ? -1 : count
 }
 
 (Number as any).prototype.add = (num: string | number) => {
     return Number(this) + Number(num)
+}
+
+globalThis.clear = () => console.log('\x1Bc')
+
+var intervalID: NodeJS.Timer | null = null
+const watchFunction = (call: Function, interval: number = 1000) => {
+    clear()
+    disWatchFuntion()
+    intervalID = setInterval(() => {
+        call()
+    }, interval)
+}
+
+const disWatchFuntion = () => {
+    if (intervalID != null) clearInterval(intervalID)
 }
 
 export {
@@ -366,11 +384,19 @@ declare global {
     var getJclassName: (jclsName: NativePointer, ShouldRet: boolean) => string | undefined
     var checkCtx: (ctx: CpuContext, type?: "LR" | "PC" | "SP") => void | string
     // var filterDuplicateOBJ: (objstr: string, maxCount?: number) => number
-    var runOnMain: (UpDatePtr: NativePointer, Callback: Function) => void
+    var runOnMain: (UpDatePtr?:  | Function, Callback?: Function) => void
     var runOnNewThread: (Callback: Function) => void
     var SendMessage: (str0: string, str1: string, str2?: string) => void
     var SendMessageImpl: (platform: "IronSource" | "MaxSdkCallbacks" | "MoPubManager" | "TPluginsGameObject") => void
     var HookForwardEvent: () => void
+
+    var clear: () => void //清屏
+    var cls: () => void // alias clear
+    var watchFunction: (call: Function, interval?: number) => void
+    var w: typeof watchFunction // alias watch
+    var disWatchFuntion: () => void
+    var dd: typeof disWatchFuntion
+    var P: <T>(block: () => T | Promise<T>) => Promise<T>
 }
 
 globalThis.d = detachAll
@@ -386,3 +412,10 @@ globalThis.runOnMain = runOnMain
 globalThis.runOnNewThread = runOnNewThread
 globalThis.SendMessage = SendMessage
 globalThis.SendMessageImpl = SendMessageImpl
+globalThis.clear = clear
+globalThis.cls = clear
+globalThis.watchFunction = watchFunction
+globalThis.w = globalThis.watchFunction
+globalThis.disWatchFuntion = disWatchFuntion
+globalThis.dd = disWatchFuntion
+globalThis.P = (call: Function) => { return new Promise((resolve, _reject) => { resolve(call()) }) }

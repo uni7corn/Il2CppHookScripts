@@ -1,23 +1,41 @@
+import { SIGNAL } from "./enum"
+import { PassType } from "../utils/common"
 import { formartClass as FM } from "../utils/formart"
 
 export { }
 
 declare global {
     var protect: (mPtr: NativePointer) => void
-    var watch: (mPtr: NativePointer, length?: number) => void
+    var watchMemory: (mPtr: NativePointer, length?: number) => void
     var watchDisabled: () => void
     var patchTest: (mPtr: NativePointer, size?: number) => void
     var findInMemory: (typeStr: "Dex" | "Dex1" | "PNG" | "global-metadata.dat" | string, scanSync?: boolean) => void
     var fridaInfo: () => void
     var listThreads: (maxCountThreads?: number) => void
 
+    var currentThreadName: () => string
+
+    // 下面这三个用于frida配合lldb更方便的断点
+    var raise: (sign: SIGNAL) => number
+    var InsLoop: (insPtr: number | NativePointer) => void
+    var InsPass: (insPtr: number | NativePointer) => void
+
     var listModules: (filterName?: string) => void
     var listModule: (moduleName: string, printItems?: number) => void
+
+    var b_export: (moduleName: string, exportName?: string) => void
+
     /**
      * findExport 侧重点在定位一些我们只知道函数名不知道他在那个模块里面（用于定位导出函数）
      * 故exportName作为第一个参数，第二个参数用作筛选
+     * 
+     * example:
+     * findExport("Java_")
+     * findExport("art::StackVisitor::","libart.so",null,true)
+     * findExport("art::ArtMethod::","libart.so",(exp,dm)=>{LOGD("\n"+exp.address +" -> "+ dm);LOGZ("\t"+exp.name)},true)
+     * 
      */
-    var findExport: (exportName: string, moduleName?: string, callback?: (exp: ModuleExportDetails) => void) => void
+    var findExport: (exportName: string, moduleName?: string, callback?: (exp: ModuleExportDetails | ModuleSymbolDetails) => void) => void
     /**
      * findImport 侧重点在像IDA一样方便的查看指定Module的导入函数
      * 故ModuleName作为第一个参数，第二个参数用作筛选
@@ -35,6 +53,43 @@ declare global {
 
     var cmdouleTest: () => void
     var sqliteTest: () => void
+    // var registerClassTest: () => void
+
+    var demangleName: (expName: string) => string
+
+    var packApiResove: (patter?: string) => void
+}
+
+/**
+ *  b_export("Load", "libcocos2djs.so")
+ */
+let cacheMethods = new Map<string, number>()
+globalThis.b_export = (moduleName: string, exportName?: string, passAddress?: number[]) => {
+    findExport(moduleName, exportName, (exp: ModuleExportDetails | ModuleSymbolDetails) => {
+        if (exp.type != "function") return
+        if (passAddress == undefined) {
+            innerAttach(exp as ModuleExportDetails)
+        } else {
+            if (!passAddress!.includes(exp.address.toInt32())) {
+                innerAttach(exp as ModuleExportDetails)
+            }
+        }
+    })
+
+    function innerAttach(exp: ModuleExportDetails) {
+        try {
+            let lis: InvocationListener = Interceptor.attach(exp.address, {
+                onEnter: function (args) {
+                    cacheMethods.get(exp.name) ? cacheMethods.set(exp.name, cacheMethods.get(exp.name)! + 1) : cacheMethods.set(exp.name, 1)
+                    if (cacheMethods.get(exp.name)! > 10) lis.detach()
+                    LOGD(`Called : ${exp.name} @ ${exp.address} \nargs : ${args[0]} ${args[1]} ${args[2]} ${args[3]}`)
+                }
+            })
+            LOGD(`Hooked : ${exp.name} @ ${exp.address} | ${exp.address.sub(Process.findModuleByAddress(exp.address)!.base)}`)
+        } catch (e) {
+            LOGE(`Hooked : ${exp.name} @ ${exp.address} | ${exp.address.sub(Process.findModuleByAddress(exp.address)!.base)}\n${e}`)
+        }
+    }
 }
 
 globalThis.protect = (mPtr: NativePointer, size: number = 0x1000, protection: PageProtection = "rwx") => {
@@ -42,7 +97,12 @@ globalThis.protect = (mPtr: NativePointer, size: number = 0x1000, protection: Pa
     Memory.protect(mPtr, size, protection)
 }
 
-globalThis.watch = (mPtr: NativePointer, length: number = 0x10) => {
+/**
+ * frida API 实现的内存断点的封装
+ * @param {NativePointer} mPtr 断点地址 
+ * @param {number} length 长度
+ */
+globalThis.watchMemory = (mPtr: NativePointer, length: number = 0x10) => {
 
     class MenRange implements MemoryAccessRange {
         base: NativePointer
@@ -110,20 +170,6 @@ globalThis.sqliteTest = () => {
         console.log('Bio:', bio);
     }
     smt.reset()
-}
-
-globalThis.patchTest = (mPtr: NativePointer, size: number = 1) => {
-    Memory.patchCode(checkPointer(mPtr), Process.pageSize * size, (code: NativePointer) => {
-        LOGD(code)
-        let writer = new ArmWriter(code)
-        writer.putLabel('start')
-        writer.putNop()
-        writer.putCallAddressWithArguments(Module.findExportByName("libil2cpp.so", "il2cpp_string_new")!, ['r10', 0x10])
-        LOGD(writer.base + " " + writer.pc + " " + writer.offset + " " + writer.code)
-        writer.putBlxReg('lr')
-        writer.putBCondLabel("eq", 'start')
-        writer.flush()
-    })
 }
 
 globalThis.findInMemory = (pattern: "Dex" | "Dex1" | "PNG" | "global-metadata.dat" | string, scanSync: boolean = false) => {
@@ -221,7 +267,7 @@ globalThis.findInMemory = (pattern: "Dex" | "Dex1" | "PNG" | "global-metadata.da
             })
             break
         default:
-            var md = Process.findModuleByName("libil2cpp.so")
+            let md = Process.findModuleByName("libil2cpp.so")
             if (md == null) {
                 LOGE("NOT FOUND Module : libil2cpp.so")
                 break
@@ -229,7 +275,7 @@ globalThis.findInMemory = (pattern: "Dex" | "Dex1" | "PNG" | "global-metadata.da
                 LOGW(JSON.stringify(m) + "\n")
             }
             if (scanSync) {
-                var results = Memory.scanSync(md.base, md.size, pattern)
+                let results = Memory.scanSync(md.base, md.size, pattern)
                 LOGD("onMatch result = \n" + JSON.stringify(results))
             } else {
                 Memory.scan(md.base, md.size, pattern, {
@@ -238,7 +284,7 @@ globalThis.findInMemory = (pattern: "Dex" | "Dex1" | "PNG" | "global-metadata.da
                         return 'stop'
                     },
                     onComplete: function () {
-                        LOGE("onComplete");
+                        LOGE("onComplete")
                     }
                 })
             }
@@ -246,7 +292,7 @@ globalThis.findInMemory = (pattern: "Dex" | "Dex1" | "PNG" | "global-metadata.da
     }
 
     function toInt32Big(mPtr: NativePointer | number) {
-        var resultStr = ''
+        let resultStr: string = ""
         var aimStr = String(mPtr).split("0x")[1]
         for (let i = aimStr.length - 1; i >= 0; i--)
             resultStr += aimStr.charAt(i)
@@ -256,13 +302,19 @@ globalThis.findInMemory = (pattern: "Dex" | "Dex1" | "PNG" | "global-metadata.da
     function find(pattern: string, callback: (pattern: string, address: NativePointer, size: number) => void) {
         LOG("Start Find Pattern '" + pattern + "'\nWatting ......", LogColor.C96)
         // 代码都是位于只读段
-        let addrArray = Process.enumerateRanges("r--");
+        let addrArray: RangeDetails[] = Process.enumerateRanges("r--")
+        let length: number = addrArray.length
+        let index: number = 0
         addrArray.forEach((item) => {
             Memory.scan(item.base, item.size, pattern, {
                 onMatch: function (address, size) {
                     callback(pattern, address, size)
+                    return "stop"
                 },
-                onComplete: function () { }
+                onComplete: function () {
+                    LOGE(`onComplete ${index++}/${length}`)
+                    clear()
+                }
             })
         })
     }
@@ -288,6 +340,58 @@ globalThis.fridaInfo = () => {
     LOGD(`${getLine(40)}\n`)
 }
 
+export function getThreadName(tid: number = Process.id) {
+    let threadName: string = "unknown"
+    try {
+        var file = new File("/proc/self/task/" + tid + "/comm", "r")
+        threadName = file.readLine().toString().trimEnd()
+        file.close()
+    } catch (e) { throw e }
+
+    // var threadNamePtr: NativePointer = Memory.alloc(0x40)
+    // var tid_p: NativePointer = Memory.alloc(p_size).writePointer(ptr(tid))
+    // var pthread_getname_np = new NativeFunction(Module.findExportByName("libc.so", 'pthread_getname_np')!, 'int', ['pointer', 'pointer', 'int'])
+    // pthread_getname_np(ptr(tid), threadNamePtr, 0x40)
+    // threadName = threadNamePtr.readCString()!
+
+    return threadName
+}
+
+globalThis.currentThreadName = (): string => {
+    let tid = Process.getCurrentThreadId()
+    return getThreadName(tid).toString()
+}
+
+globalThis.raise = (sign: SIGNAL = SIGNAL.SIGSTOP): number => {
+    let raise = new NativeFunction(Module.findExportByName("libc.so", 'raise')!, 'int', ['int'])
+    return raise(sign)
+}
+
+var cacheIns = new Map<string, ArrayBuffer>()
+globalThis.InsLoop = (insPtr: number | NativePointer) => {
+    let insLocal: NativePointer = checkPointer(insPtr)
+    cacheIns.set(insLocal.toString(), insLocal.readByteArray(4)!)
+    Memory.patchCode(insLocal, 4, (code: NativePointer) => {
+        // bl 0x0
+        let writer: ArmWriter | Arm64Writer
+        if (Process.arch == "arm") {
+            writer = new ArmWriter(code)
+        } else if (Process.arch == "arm64") {
+            writer = new Arm64Writer(code)
+        } else throw new Error("NOT SUPPORT ARCH : " + Process.arch)
+        writer.putBranchAddress(insLocal)
+        writer.flush()
+    })
+}
+
+globalThis.InsPass = (insPtr: number | NativePointer) => {
+    let insLocal: NativePointer = checkPointer(insPtr)
+    let insBytes = cacheIns.get(insLocal.toString())!
+    Memory.patchCode(insLocal, 4, (code: NativePointer) => {
+        code.writeByteArray(insBytes)
+    })
+}
+
 let index_threads: number
 globalThis.listThreads = (maxCountThreads: number = 20) => {
     index_threads = 0
@@ -297,7 +401,7 @@ globalThis.listThreads = (maxCountThreads: number = 20) => {
         .slice(0, maxCountThreads)
         .forEach((thread: ThreadDetails) => {
             let indexText = FM.alignStr(`[${++index_threads}]`, 6)
-            let text = `${indexText} ${thread.id} ${thread.state}`
+            let text = `${indexText} ${thread.id} ${thread.state} | ${getThreadName(thread.id)}`
             let ctx = thread.context
             current == thread.id ? LOGE(text) : LOGD(text)
             LOGZ(`\tPC : ${ctx.pc}  ${checkCtx(ctx, "PC")}`)
@@ -375,6 +479,7 @@ globalThis.listModule = (moduleName: string, printItems: number = 5) => {
     }
 }
 
+// 局部函数 打印模块信息
 function printModule(md: Module, needIndex: boolean = false) {
     needIndex == true ? LOGD(`\n[${++index}]\t${md.name}`) : LOGD(`\n[*]\t${md.name}`)
     // 保留三位小数
@@ -386,48 +491,116 @@ function printModule(md: Module, needIndex: boolean = false) {
     LOGZ(`\t${md.path}\n`)
 }
 
-globalThis.findExport = (exportName: string, moduleName: string | undefined, callback?: (exp: ModuleExportDetails) => void) => {
-    // 未填写回调函数就直接用默认回调函数来展示导出函数的详细信息
+globalThis.findExport = (exportName: string, moduleName?: string, callback?: (exp: ModuleExportDetails | ModuleSymbolDetails, demangleName?: string) => void, checkDemangleName: boolean = false, findSym: boolean = false) => {
     if (callback == undefined) callback = showDetails
+    var count = 0
     if (moduleName == undefined) {
-        // 遍历所有Module的导出函数
-        Process.enumerateModules().forEach((md: Module) => {
-            md.enumerateExports().forEach((exp: ModuleExportDetails) => {
-                if (exp.name.indexOf(exportName) != -1) callback!(exp)
+        if (findSym) {
+            Process.enumerateModules().forEach((md: Module) => {
+                md.enumerateSymbols().filter((sym: ModuleSymbolDetails) => sym.name.includes(exportName)).forEach((sym: ModuleSymbolDetails) => checkAndShow(sym, callback))
             })
-        })
+        } else {
+            Process.enumerateModules().forEach((md: Module) => {
+                md.enumerateExports().forEach((exp: ModuleExportDetails) => checkAndShow(exp, callback))
+            })
+        }
     } else {
-        // 遍历指定Module下的导出函数
         let md: Module | null = Process.findModuleByName(moduleName)
         if (md == null) throw new Error("NOT FOUND Module : " + moduleName)
-        md.enumerateExports().forEach((exp: ModuleExportDetails) => {
-            if (exp.name.indexOf(exportName) != -1) callback!(exp)
-        })
+        if (findSym) {
+            md.enumerateSymbols().filter((sym: ModuleSymbolDetails) => sym.name.includes(exportName)).forEach((sym: ModuleSymbolDetails) => checkAndShow(sym, callback))
+        } else {
+            md.enumerateExports().forEach((exp: ModuleExportDetails) => checkAndShow(exp, callback))
+        }
     }
-    if (callback == showDetails) newLine()
 
-    function showDetails(exp: ModuleExportDetails) {
+    if (callback == showDetails) LOGN(`\n[=] ${count} result(s)\n`)
+    else return
+
+    function checkAndShow(exp: ModuleExportDetails | ModuleSymbolDetails, callback?: (exp: ModuleExportDetails | ModuleSymbolDetails, demangleName?: string) => void) {
+        let name = exp.name
+        if (checkDemangleName) {
+            // 这会遍历太多的函数名 并且调用 demangle 会消耗大量时间，不建议使用
+            let demangledName = demangleName(name)
+            demangledName = (demangledName == "" ? name : demangledName)!
+            if (name.indexOf(exportName) != -1 || demangledName.indexOf(exportName) != -1) callback!(exp, demangledName)
+        } else {
+            if (name.indexOf(exportName) != -1) {
+                let demangledName = demangleName(name)
+                demangledName = (demangledName == "" ? name : demangledName)!
+                callback!(exp, demangledName)
+            }
+        }
+    }
+
+    function showDetails(exp: ModuleExportDetails | ModuleSymbolDetails, demangleName?: string) {
         try {
             let md: Module = Process.findModuleByAddress(exp.address)!
             if (md == null) {
-                // Process 找不到和linker相关的导出函数，这里单独处理一下 { exp: findExport("dlopen") }
-                let mdt = Process.findModuleByName("linker")!
+                let mdt: Module = Process.findModuleByName(Process.arch == 'arm' ? 'linker' : 'linker64')!
                 mdt.enumerateExports().forEach((linkerExp: ModuleExportDetails) => {
                     if (linkerExp.address.equals(exp.address) && linkerExp.name == exp.name) md = mdt
                 })
             }
             let rg: RangeDetails = Process.findRangeByAddress(exp.address)!
-            LOGD(`\n[*] ${exp.type} -> address: ${exp.address} ( ${exp.address.sub(md.base)} ) | name: ${exp.name}`)
-            LOGZ(`\t[-] base: ${md.base} | size: 0x${md.size.toString(16).padEnd(p_size * 2, " ")} <- module:  ${md.name}`)
-            LOGZ(`\t[-] base: ${rg.base} | size: 0x${rg.size.toString(16).padEnd(p_size * 2, " ")} <- range:   ${rg.protection}`)
+            let dmn = demangleName!
+            let desp_first_line = `\n[*] ${exp.type} -> address: ${exp.address} ( ${exp.address.sub(md.base)} )  ${exp.name}`
+            let desp_first_line_len = desp_first_line.length
+            LOGD(desp_first_line)
+            let paddedDmn = dmn.padStart(desp_first_line_len - exp.name.length + dmn.length - 1, " ")
+            if (dmn.length != 0) LOGO(`${paddedDmn}`)
+            LOGZ(`\t[-] MD_Base: ${md.base} | size: ${ptr(md.size).toString().padEnd(p_size * 2, " ")} <-  module:  ${md.name}`)
+            LOGZ(`\t[-] RG_Base: ${rg.base} | size: ${ptr(rg.size).toString().padEnd(p_size * 2, " ")} <-  range:   ${rg.protection}`)
+            ++count
         } catch (error) {
-            if (Process.findModuleByAddress(exp.address) == null) LOGE("Module not found")
-            if (Process.findRangeByAddress(exp.address) == null) LOGE("Range not found")
+            if (!findSym) {
+                if (Process.findModuleByAddress(exp.address) == null) LOGE("Module not found")
+                if (Process.findRangeByAddress(exp.address) == null) LOGE("Range not found")
+            }
             LOGD(JSON.stringify(exp))
         }
     }
 }
 
+/**
+ * Demangles a C++ symbol name using available libraries.
+ * @param expName The mangled symbol name to demangle.
+ * @returns The demangled symbol name, or an empty string if demangling failed.
+ */
+export function demangleName(expName: string) {
+    let demangleAddress: NativePointer | null = Module.findExportByName("libc++.so", '__cxa_demangle')
+    if (demangleAddress == null) demangleAddress = Module.findExportByName("libunwindstack.so", '__cxa_demangle')
+    if (demangleAddress == null) demangleAddress = Module.findExportByName("libbacktrace.so", '__cxa_demangle')
+    if (demangleAddress == null) demangleAddress = Module.findExportByName(null, '__cxa_demangle')
+    if (demangleAddress == null) throw Error("can not find export function -> __cxa_demangle")
+    let demangle: Function = new NativeFunction(demangleAddress, 'pointer', ['pointer', 'pointer', 'pointer', 'pointer'])
+    let mangledName: NativePointer = Memory.allocUtf8String(expName)
+    let outputBuffer: NativePointer = NULL
+    let length: NativePointer = NULL
+    let status: NativePointer = Memory.alloc(Process.pageSize)
+    let result: NativePointer = demangle(mangledName, outputBuffer, length, status) as NativePointer
+    if (status.readInt() === 0) {
+        let resultStr: string | null = result.readUtf8String()
+        return (resultStr == null || resultStr == expName) ? "" : resultStr
+    } else return ""
+}
+
+globalThis.demangleName = demangleName
+
+globalThis.packApiResove = (patter: string = "exports:*!*Unwind*"): void => {
+    let index: number = 0
+    new ApiResolver("module").enumerateMatches(patter).forEach((exp) => {
+        LOGD(`${PD(`[${++index}]`, 5)}${exp.name} ${exp.address}`)
+        LOGZ(`\t${demangleName(exp.name.split("!")[1])}`)
+    })
+}
+
+/**
+ * 查找导入表
+ * @param {string} moduleName 
+ * @param {string} importName 
+ * @returns 
+ */
 globalThis.findImport = (moduleName: string = "libc.so", importName: string = "") => {
     let md = Process.findModuleByName(moduleName)
     if (md == null) {
@@ -444,6 +617,11 @@ globalThis.findImport = (moduleName: string = "libc.so", importName: string = ""
     newLine()
 }
 
+/**
+ * 获取文件长度
+ * @param filePath 文件路径
+ * @returns 
+ */
 const getFileLenth = (filePath: string): number => {
     let file = callFunctionWithOutError(Module.findExportByName("libc.so", "fopen")!, allocCStr(filePath), allocCStr("rwx"))
     if (file.isNull()) return 0
@@ -467,11 +645,11 @@ globalThis.StalkerTraceEvent = (mPtr: NativePointer, range: NativePointer[] | un
             range[i] = checkPointer(range[i])
         }
     }
-    A(mPtr, (args, ctx, passValue) => {
+    A(mPtr, (args: NativePointer[], _ctx: CpuContext, passValue: Map<PassType, any>) => {
         newLine()
         passValue.set("len", FM.printTitileA(`Enter ---> arg0:${args[0]}  arg1:${args[1]}  arg2:${args[2]}  arg3:${args[3]} | ${Process.getCurrentThreadId()}`, LogColor.YELLOW))
         stalkerEnter(Process.getCurrentThreadId())
-    }, (ret, ctx, passValue) => {
+    }, (ret: NativePointer, _ctx: CpuContext, passValue: Map<PassType, any>) => {
         LOGW(`${getLine(20)}\n Exit ---> ret : ${ret}\n${getLine(passValue.get("len"))}`)
         stalkerExit(Process.getCurrentThreadId())
     })
@@ -495,21 +673,30 @@ globalThis.StalkerTraceEvent = (mPtr: NativePointer, range: NativePointer[] | un
                 msg.forEach((event: StalkerCallEventFull) => {
                     let md1 = Process.findModuleByAddress(event[1] as NativePointer)
                     let md2 = Process.findModuleByAddress(event[2] as NativePointer)
+                    let method_1 = AddressToMethodNoException(event[1] as NativePointer)
+                    let method_2 = AddressToMethodNoException(event[2] as NativePointer)
+                    if (method_1 != null) LOGW(`${method_1.name}`)
+                    if (method_2 != null) LOGW(`${method_2.name}`)
                     LOGD(`${event[0]} Times:${event[3]} ${event[1]}@${md1?.name} ${event[2]}@${md2?.name} `)
                 })
             }
         })
     }
 
-    function stalkerExit(tid: ThreadId) {
+    function stalkerExit(_tid: ThreadId) {
         Stalker.unfollow()
         Stalker.garbageCollect()
     }
 }
 
-// exp: StalkerTracePath(0x4CA23C,[0x4CA23C,0x4CA308])
+/**
+ * exp: StalkerTracePath(0x4CA23C,[0x4CA23C,0x4CA308])
+ * @param {NativePointer} mPtr 
+ * @param {NativePointer[] | undefined} range 
+ * @returns 
+ */
 globalThis.StalkerTracePath = (mPtr: NativePointer, range: NativePointer[] | undefined) => {
-    let src_mPtr = mPtr
+    let src_mPtr: NativePointer = mPtr
     mPtr = checkPointer(mPtr)
     if (mPtr == undefined || mPtr.isNull()) return
     const moduleG: Module | null = Process.findModuleByAddress(mPtr)
@@ -522,11 +709,11 @@ globalThis.StalkerTracePath = (mPtr: NativePointer, range: NativePointer[] | und
             range[i] = checkPointer(range[i])
         }
     }
-    A(mPtr, (args, ctx, passValue) => {
+    A(mPtr, (args: NativePointer[], _ctx: CpuContext, passValue: Map<PassType, any>) => {
         newLine()
         passValue.set("len", FM.printTitileA(`Enter ---> arg0:${args[0]}  arg1:${args[1]}  arg2:${args[2]}  arg3:${args[3]} | ${Process.getCurrentThreadId()}`, LogColor.YELLOW))
         stalkerEnter(Process.getCurrentThreadId())
-    }, (ret, ctx, passValue) => {
+    }, (ret: NativePointer, _ctx: CpuContext, passValue: Map<PassType, any>) => {
         LOGW(`${getLine(20)}\n Exit ---> ret : ${ret}\n${getLine(passValue.get("len"))}`)
         stalkerExit(Process.getCurrentThreadId())
     })
@@ -564,15 +751,144 @@ globalThis.StalkerTracePath = (mPtr: NativePointer, range: NativePointer[] | und
     }
 }
 
+///////// ↓ 测试代码 不用管 ↓ /////////
+
 globalThis.cmdouleTest = () => {
-    var source =
-        "#include <stdio.h>" +
-        "void functionFromCModule(){" +
-        "   printf(\"Print from CModule\n\");" +
-        "}";
-    var cModule = new CModule(source);
-    console.log(JSON.stringify(cModule));
-    var ptrFunctionFromCModule = cModule['functionFromCModule'];
-    var functionFromCModule = new NativeFunction(ptrFunctionFromCModule, 'void', []);
-    functionFromCModule();
+
+    Interceptor.attach(ptr(0xa8280614), new CModule(`
+    #include <gum/guminterceptor.h>
+
+    void onEnter(GumInvocationContext *ctx) {
+        g_print("onEnter\n");
+    }
+
+    `) as NativeInvocationListenerCallbacks)
+
+    // function logcat(message) {
+    //     let logcatF = new NativeFunction(Module.findExportByName("liblog.so", "__android_log_print"), 'void', ['int', 'pointer', 'pointer', 'pointer'])
+    //     logcatF(4, Memory.allocUtf8String("ZZZ"), Memory.allocUtf8String("%s"), Memory.allocUtf8String(message))
+    //     console.log(message)
+    // }
+
+    // logcat("START HOOK -> " + Module.findBaseAddress("libil2cpp.so").add(0xc75f78))
+
+    // Interceptor.attach(Module.findBaseAddress("libil2cpp.so").add(0xc75f78), new CModule(`
+    //     #include <gum/guminterceptor.h>
+
+    //     extern void onEnterJS(GumCpuContext *ctx, void* value);
+
+    //     void onEnter(GumInvocationContext *ctx) {
+    //         onEnterJS(ctx->cpu_context, gum_invocation_context_get_nth_argument(ctx,1));
+    //     }
+
+    // `, {
+    //     onEnterJS: new NativeCallback((ctx,value) => {
+    //         let message = `OnEnter : ${ctx} ${value}`
+    //         logcat(message)
+    //     }, 'void', ['pointer'])
+    // }))
+
 }
+
+function Arm64WriterUsingExample() {
+    // mycode.add(0x4).writeU32(0xD10943FF)//SUB SP ,SP ,#0x250
+    // mycode.add(0x8).writeU32(0xA90077E8)//STP X8,X29,[SP]
+    // mycode.add(0xc).writeU32(0xA90107E0)//STP X0 ,X1 ,[SP,#0x10]
+
+    let writer = new Arm64Writer(ptr(123))
+    writer.putSubRegRegImm('sp', 'sp', 0x250)
+    // type Arm64IndexMode = "post-adjust" | "signed-offset" | "pre-adjust";
+    writer.putStpRegRegRegOffset('x8', 'x29', 'sp', 0, "post-adjust")
+    writer.putStpRegRegRegOffset('x0', 'x1', 'sp', 0x10, "post-adjust")
+    // mycode.add(0x10).writeU32(0xA9020FE2)//STP X2,X3,[SP,#0x20]
+    // mycode.add(0x14).writeU32(0x58000760)//LDR X0 , [mycode,#0x100]
+    // mycode.add(0x18).writeU32(0x58000781)//LDR X1 , [mycode,#0x108]
+    writer.putStpRegRegRegOffset('x2', 'x3', 'sp', 0x20, "post-adjust")
+    writer.putLdrRegRegOffset('x0', 'x0', 0x100)
+    writer.putLdrRegRegOffset('x1', 'x0', 0x108)
+    // mycode.add(0x1C).writeU32(0x580007A2)//LDR X2 , [mycode,#0x110]
+    // mycode.add(0x20).writeU32(0x580007C3)//LDR X3 , [mycode,#0x118]
+    // mycode.add(0x24).writeU32(0xD63F0060)//BLR X3
+    writer.putLdrRegRegOffset('x2', 'x0', 0x110)
+    writer.putLdrRegRegOffset('x3', 'x0', 0x118)
+    writer.putBlrReg('x3')
+    // mycode.add(0x28).writeU32(0xA9420FE2)//LDP X2, X3,[SP,#0x20]
+    // mycode.add(0x2C).writeU32(0xA94107E0)//LDP X0, X1,[SP,#0x10]
+    // mycode.add(0x30).writeU32(0xA94077E8)//LDP X8, X29,[SP]
+    writer.putLdpRegRegRegOffset('x2', 'x3', 'sp', 0x20, "post-adjust")
+    writer.putLdpRegRegRegOffset('x0', 'x1', 'sp', 0x10, "post-adjust")
+    writer.putLdpRegRegRegOffset('x8', 'x29', 'sp', 0, "post-adjust")
+    // mycode.add(0x34).writeU32(0x910943FF)//ADD SP, SP, #0x250
+    // mycode.add(0x38).writeU32(0x5800075E)//LDR X30, [mycode,#0x120]
+    // mycode.add(0x3C).writeU32(0xD65F03C0)//RET
+    writer.putAddRegRegImm('sp', 'sp', 0x250)
+    writer.putLdrRegRegOffset('x30', 'x0', 0x120)
+    writer.putRet()
+
+    writer.flush()
+
+    Memory.patchCode(ptr(123), 0x40, (code: NativePointer) => {
+        LOGD(code)
+        let writer = new Arm64Writer(code)
+        writer.putLabel('start')
+        writer.putNop()
+        writer.putCallAddressWithArguments(Module.findExportByName("libil2cpp.so", "il2cpp_string_new")!, ['x0', 0x10])
+        LOGD(writer.base + " " + writer.pc + " " + writer.offset + " " + writer.code)
+        writer.putBlrReg('lr')
+        writer.putBCondLabel("eq", 'start')
+        writer.flush()
+    })
+}
+
+globalThis.patchTest = (mPtr: NativePointer, size: number = 1) => {
+    Memory.patchCode(checkPointer(mPtr), Process.pageSize * size, (code: NativePointer) => {
+        LOGD(code)
+        let writer = new ArmWriter(code)
+        writer.putLabel('start')
+        writer.putNop()
+        writer.putCallAddressWithArguments(Module.findExportByName("libil2cpp.so", "il2cpp_string_new")!, ['r10', 0x10])
+        LOGD(writer.base + " " + writer.pc + " " + writer.offset + " " + writer.code)
+        writer.putBlxReg('lr')
+        writer.putBCondLabel("eq", 'start')
+        writer.flush()
+    })
+}
+
+// globalThis.registerClassTest = () => {
+//     Java.perform(function () {
+//         // 1. 获取原始的 MaxUnityAdManager 类
+//         var MaxUnityAdManager = Java.use("com.applovin.mediation.unity.MaxUnityAdManager");
+//         // "com.mp.jc.JCWrapperAction"
+//         var JCWrapperAction = Java.use("com.mp.jc.JCWrapperAction");
+
+//         // 2. 使用 Java.registerClass 创建一个新类来实现 JCWrapperAction 接口
+//         var OurJCWrapperAction = Java.registerClass({
+//             name: "com.assistant.OurJCWrapperAction",
+//             implements: [JCWrapperAction],
+//             methods: {
+//                 callback: function (isSuccess) {
+//                     // 你可以在这里执行自己的代码
+//                     console.log("Our callback: isSuccess:", isSuccess);
+
+//                     var str3 = MaxUnityAdManager.TAG.value;
+//                     console.log(str3, "callback: isSuccess:", isSuccess);
+
+//                     if (isSuccess) {
+//                         MaxUnityAdManager.onUserRewarded.call(MaxUnityAdManager, maxAd, null); // 使用 call 调用以确保正确的上下文
+//                     }
+//                     MaxUnityAdManager.onAdHidden.call(MaxUnityAdManager, maxAd);
+//                 }
+//             }
+//         });
+
+//         // 3. Hook JCWrapper.showRewardVideo 方法以使用我们的实现替代原始实现
+//         var JCWrapper = Java.use("com.mp.jc.JCWrapper");
+//         JCWrapper.showRewardVideo.implementation = function (action) {
+//             console.log("showRewardVideo intercepted");
+//             // 使用我们的新类替代原始的action
+//             var ourAction = OurJCWrapperAction.$new();
+//             this.showRewardVideo.call(this, ourAction);
+//         };
+//     });
+
+// }

@@ -1,4 +1,3 @@
-
 import "./alloc"
 import "./cache"
 import "./caller"
@@ -13,3 +12,7 @@ import "./context"
 import "./stdString"
 import "./dumper"
 import "./system"
+import "./sem"
+import "./exception"
+import "./thread"
+import "./test"

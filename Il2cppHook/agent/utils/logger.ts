@@ -16,6 +16,7 @@ export class Logger {
     static LOGE = (msg: any): void => LOG(msg, LogColor.RED)
     static LOGG = (msg: any): void => LOG(msg, LogColor.C32)
     static LOGD = (msg: any): void => LOG(msg, LogColor.C36)
+    static LOGN = (msg: any): void => LOG(msg, LogColor.C35)
     static LOGO = (msg: any): void => LOG(msg, LogColor.C33)
     static LOGP = (msg: any): void => LOG(msg, LogColor.C34)
     static LOGM = (msg: any): void => LOG(msg, LogColor.C92)
@@ -108,12 +109,60 @@ export class Logger {
     }
 }
 
+enum android_LogPriority {
+    ANDROID_LOG_UNKNOWN = 0,
+    ANDROID_LOG_DEFAULT = 1,
+    ANDROID_LOG_VERBOSE = 2,
+    ANDROID_LOG_DEBUG = 3,
+    ANDROID_LOG_INFO = 4,
+    ANDROID_LOG_WARN = 5,
+    ANDROID_LOG_ERROR = 6,
+    ANDROID_LOG_FATAL = 7,
+    ANDROID_LOG_SILENT = 8
+}
+
+const LOG_TAG: string = "ZZZ"
+const useCModule = false
+
+globalThis.logcat = (msg: string) => {
+    Java.perform(function () {
+        Java.use("android.util.Log").e("ZZZ", msg)
+    })
+}
+
+const testMem = Memory.alloc(0x30)
+// https://www.freecodecamp.org/news/all-emojis-emoji-list-for-copy-and-paste/#smileyfaceemojis
+// 20 F0 9F A4 A9 F0 9F A5 B0 F0 9F A4 96 F0 9F 92 AC F0 9F 92 BC E2 80 BC EF B8 8F 20 54 65 73 74 4D 65 73 73 61 67 65 20 7E
+testMem.writeByteArray([0x20, 0xF0, 0x9F, 0xA4, 0xA9, 0xF0, 0x9F, 0xA5, 0xB0, 0xF0, 0x9F, 0xA4, 0x96, 0xF0, 0x9F, 0x92, 0xAC, 0xF0, 0x9F, 0x92, 0xBC, 0xE2, 0x80, 0xBC, 0xEF, 0xB8, 0x8F, 0x20, 0x54, 0x65, 0x73, 0x74, 0x4D, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x20, 0x7E])
+
+globalThis.logcat_native = (fmt: string = "%s", msg: NativePointer = testMem, tag: string = LOG_TAG, priority: android_LogPriority = android_LogPriority.ANDROID_LOG_INFO) => {
+    if (!useCModule) {
+        const logcat_f = new NativeFunction(Module.findExportByName("liblog.so", "__android_log_print")!
+            , 'void', ['int', 'pointer', 'pointer', 'pointer'])
+        logcat_f(4, Memory.allocUtf8String(tag), Memory.allocUtf8String(fmt), msg)
+    } else {
+        var cmd = new CModule(`
+        #include <stdio.h>
+        extern int __android_log_print(int, const char*, const char*, ...);
+        void logcat(const char* fmt, const char* msg){
+            __android_log_print(${priority}, "${tag}", fmt, msg);
+        }
+        `, { __android_log_print: Module.findExportByName("liblog.so", "__android_log_print")! })
+        new NativeFunction(cmd["logcat"], 'void', ['pointer'])(msg)
+    }
+}
+
+globalThis.logcat_test = (fmt: string = "%s", msg: string = "TEST", tag: string = LOG_TAG, priority: android_LogPriority = android_LogPriority.ANDROID_LOG_INFO) => {
+    logcat_native(fmt, Memory.allocUtf8String(msg), tag, priority)
+}
+
 declare global {
     var LOG: (str: any, type?: LogColor) => void
     // var LOGS: (str: string, colorDescription: [number, number, LogColor][]) => void
     var LOGW: (msg: any) => void // LogColor.YELLOW
     var LOGE: (msg: any) => void // LogColor.RED
     var LOGD: (msg: any) => void // LogColor.C36
+    var LOGN: (msg: any) => void // LogColor.C35
     var LOGG: (msg: any) => void // LogColor.C32
     var LOGO: (msg: any) => void // LogColor.C33
     var LOGP: (msg: any) => void // LogColor.C33
@@ -128,6 +177,11 @@ declare global {
     var TFM: (text: string, color?: LogColor, fillStr?: string, length?: number, center?: boolean) => string
     var LogColor: any
     // var log: (...text: chalk.Chalk[] | string[]) => void
+
+    // android logcat
+    var logcat: (msg: string) => void // java
+    var logcat_test: (fmt?: string, msg?: string, tag?: string, priority?: android_LogPriority) => void // native test
+    var logcat_native: (fmt?: string, msg?: NativePointer, tag?: string, priority?: android_LogPriority) => void // orgin native
 }
 
 globalThis.LOG = Logger.LOG
@@ -135,6 +189,7 @@ globalThis.LOGW = Logger.LOGW
 globalThis.LOGE = Logger.LOGE
 globalThis.LOGG = Logger.LOGG
 globalThis.LOGD = Logger.LOGD
+globalThis.LOGN = Logger.LOGN
 globalThis.LOGO = Logger.LOGO
 globalThis.LOGP = Logger.LOGP
 globalThis.LOGH = Logger.LOGH
