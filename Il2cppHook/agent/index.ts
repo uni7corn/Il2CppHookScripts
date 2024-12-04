@@ -3,8 +3,8 @@ import "./include"
 setImmediate(() => main())
 
 const main = () => {
+
     // pause()
-    // raise(SIGNAL.SIGSTOP)
     // setException()
     // HookExit()
     // JNIHelper.Init() // Hook JNI RegisterNatives
@@ -13,4 +13,5 @@ const main = () => {
     // hookLogcat()
     // HookDialog()
     // hook_artMethodInvoke()
+
 }
